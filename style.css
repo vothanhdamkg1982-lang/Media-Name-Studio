@@ -1,0 +1,283 @@
+:root {
+    --primary: #007bff;
+    --danger: #dc3545;
+    --secondary: #6c757d;
+    --bg-color: #121212;
+    --panel-bg: #1e1e1e;
+    --text: #ffffff;
+    --border: #333333;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.app-header {
+    background: var(--panel-bg);
+    padding: 15px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+}
+
+.app-header h1 {
+    font-size: 1.2rem;
+    margin-bottom: 5px;
+    color: var(--primary);
+}
+
+.current-student-display {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #ffc107;
+}
+
+.app-main {
+    flex: 1;
+    overflow-y: auto;
+    position: relative;
+}
+
+.tab-content {
+    display: none;
+    height: 100%;
+    padding-bottom: 60px;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Tùy chỉnh Camera */
+.camera-container {
+    position: relative;
+    width: 100%;
+    height: calc(100% - 80px);
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+canvas#outputCanvas {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.recording-indicator {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    background: rgba(0,0,0,0.6);
+    color: red;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 10;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    background: red;
+    border-radius: 50%;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink { 50% { opacity: 0; } }
+
+.camera-controls {
+    height: 80px;
+    background: var(--panel-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+}
+
+.control-row {
+    display: flex;
+    gap: 15px;
+    width: 100%;
+    max-width: 400px;
+}
+
+/* Nút bấm */
+.btn {
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    transition: 0.2s;
+}
+.btn:active { transform: scale(0.95); }
+.btn-primary { background: var(--primary); }
+.btn-danger { background: var(--danger); }
+.btn-secondary { background: var(--secondary); }
+.btn-large { flex: 1; font-size: 1.1rem; padding: 15px; }
+.icon-btn { width: 50px; background: #333; }
+.w-100 { width: 100%; }
+
+/* Panels & Forms */
+.panel {
+    padding: 20px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+.panel h2 { margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px;}
+
+.form-group { margin-bottom: 15px; }
+.form-group label { display: block; margin-bottom: 5px; color: #ccc; }
+.form-control {
+    width: 100%;
+    padding: 12px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: #333;
+    color: white;
+    font-size: 1rem;
+}
+
+/* Lists */
+.list-actions, .add-manual {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+.add-manual input, .search-box input {
+    flex: 1;
+    padding: 12px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: #333;
+    color: white;
+}
+.search-box { margin-bottom: 15px; }
+
+.data-list {
+    list-style: none;
+}
+.data-list li {
+    background: #333;
+    padding: 15px;
+    margin-bottom: 8px;
+    border-radius: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+.data-list li.selected {
+    border: 2px solid var(--primary);
+    background: rgba(0, 123, 255, 0.2);
+}
+
+/* Gallery */
+.gallery-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 15px;
+}
+.gallery-item {
+    position: relative;
+    background: #333;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.gallery-item img, .gallery-item video {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    display: block;
+}
+.gallery-info {
+    padding: 8px;
+    font-size: 0.9rem;
+    text-align: center;
+}
+.gallery-checkbox {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    width: 20px;
+    height: 20px;
+    z-index: 2;
+}
+.media-icon {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(0,0,0,0.6);
+    padding: 4px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+/* Bottom Nav */
+.bottom-nav {
+    display: flex;
+    background: var(--panel-bg);
+    border-top: 1px solid var(--border);
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    z-index: 100;
+}
+.nav-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--secondary);
+    padding: 15px 0;
+    font-size: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+.nav-btn.active { color: var(--primary); }
+
+.hidden { display: none !important; }
+
+/* Toast */
+.toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 30px;
+    z-index: 1000;
+    transition: opacity 0.3s;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
