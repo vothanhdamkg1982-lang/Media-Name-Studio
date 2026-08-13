@@ -554,7 +554,7 @@ const App = {
                     canvas.height = video.videoHeight;
                 }
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                this.drawWatermark(ctx, canvas);
+                // this.drawWatermark(ctx, canvas);
             }
             if (this.rawStream) {
                 this.animationFrameId = requestAnimationFrame(render);
