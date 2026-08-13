@@ -281,21 +281,22 @@ const SyncManager = {
                 .from('media')
                 .getPublicUrl(filePath);
 
-            // 3. Lưu bản ghi metadata vào Database
+            // 3. Lưu bản ghi metadata vào Database (Dùng insert chuẩn)
             const { error: dbError } = await supabaseClient
                 .from('media_files')
-                .upsert({
-                    user_id: userId,
-                    student_name: mediaObj.studentName,
-                    file_name: mediaObj.fileName,
-                    file_url: publicUrl,
-                    file_type: mediaObj.type,
-                    file_path: filePath,
-                    created_at: new Date(mediaObj.timestamp).toISOString()
-                }, { onConflict: 'file_path' });
+                .insert([
+                    {
+                        user_id: userId,
+                        student_name: mediaObj.studentName,
+                        file_name: mediaObj.fileName,
+                        file_url: publicUrl,
+                        file_type: mediaObj.type,
+                        file_path: filePath,
+                        created_at: new Date(mediaObj.timestamp).toISOString()
+                    }
+                ]);
 
             if (dbError) throw dbError;
-
             // 4. Cập nhật trạng thái Local
             mediaObj.sync_status = 'synced';
             mediaObj.file_path = filePath;
