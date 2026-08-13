@@ -1,20 +1,34 @@
 /**
- * MEDIA NAME STUDIO - Core Application Script
- * Architecture: ES6 Modules Pattern (Single File implementation)
+ * MEDIA NAME STUDIO - Core Application Engine
+ * Unified Single File Implementation
  */
 
 // ==========================================
-// 1. UTILITIES
+// 1. SUPABASE CONFIGURATION
+// ==========================================
+const SUPABASE_URL = 'https://whuyytjksrpyojmukftp.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_gpW8TcOIz4ocrrMIWUx3Qg_sZaeZqQ0';
+
+let supabaseClient = null;
+if (window.supabase) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} else {
+    console.error("Supabase SDK chưa được tải thành công!");
+}
+
+// ==========================================
+// 2. UTILITIES
 // ==========================================
 const Utils = {
     removeVietnameseTones(str) {
-        str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g,"a"); 
-        str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g,"e"); 
-        str = str.replace(/ì|í|ị|ỉ|ĩ/g,"i"); 
-        str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g,"o"); 
-        str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g,"u"); 
-        str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g,"y"); 
-        str = str.replace(/đ/g,"d");
+        if (!str) return '';
+        str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
+        str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
+        str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
+        str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+        str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
+        str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+        str = str.replace(/đ/g, "d");
         str = str.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A");
         str = str.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E");
         str = str.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I");
@@ -26,29 +40,60 @@ const Utils = {
         str = str.replace(/\u02C6|\u0306|\u031B/g, "");
         return str.replace(/[^a-zA-Z0-9]/g, "_").replace(/_+/g, "_");
     },
-    formatDateForFile(date) {
-        const d = new Date(date);
-        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}-${String(d.getMinutes()).padStart(2,'0')}-${String(d.getSeconds()).padStart(2,'0')}`;
+
+    formatDateForFile(dateObj) {
+        const d = new Date(dateObj);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        const ss = String(d.getSeconds()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}_${hh}-${min}-${ss}`;
     },
-    formatDateDisplay(date) {
-        const d = new Date(date);
-        return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+
+    formatDateDisplay(dateObj) {
+        const d = new Date(dateObj);
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const yyyy = d.getFullYear();
+        const hh = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
     },
+
     showToast(message, duration = 3000) {
         const toast = document.getElementById('toast');
+        if (!toast) return;
         toast.textContent = message;
         toast.classList.remove('hidden');
-        setTimeout(() => toast.classList.add('hidden'), duration);
+        clearTimeout(toast._timer);
+        toast._timer = setTimeout(() => toast.classList.add('hidden'), duration);
+    },
+
+    getSupportedMimeType() {
+        const types = [
+            'video/webm;codecs=vp8,opus',
+            'video/webm;codecs=vp9,opus',
+            'video/webm',
+            'video/mp4'
+        ];
+        for (const type of types) {
+            if (MediaRecorder.isTypeSupported(type)) {
+                return type;
+            }
+        }
+        return '';
     }
 };
 
 // ==========================================
-// 2. DATABASE (IndexedDB)
+// 3. DATABASE CONTROLLER (INDEXEDDB)
 // ==========================================
 class AppDB {
     constructor() {
         this.dbName = 'MediaNameStudioDB';
-        this.version = 2;
+        this.version = 3;
         this.db = null;
     }
 
@@ -104,7 +149,7 @@ class AppDB {
         return new Promise((resolve) => {
             const tx = this.db.transaction('students', 'readonly');
             const req = tx.objectStore('students').getAll();
-            req.onsuccess = () => resolve(req.result);
+            req.onsuccess = () => resolve(req.result || []);
         });
     }
 
@@ -128,10 +173,13 @@ class AppDB {
         return new Promise((resolve) => {
             const tx = this.db.transaction('media', 'readonly');
             const req = tx.objectStore('media').getAll();
-            req.onsuccess = () => resolve(req.result.sort((a,b) => b.timestamp - a.timestamp));
+            req.onsuccess = () => {
+                const results = req.result || [];
+                resolve(results.sort((a, b) => b.timestamp - a.timestamp));
+            };
         });
     }
-    
+
     async deleteMedia(ids) {
         return new Promise((resolve) => {
             const tx = this.db.transaction('media', 'readwrite');
@@ -141,24 +189,192 @@ class AppDB {
         });
     }
 }
+
 const db = new AppDB();
 
 // ==========================================
-// 3. APPLICATION STATE & CONTROLLER
+// 4. AUTH & CLOUD SYNC MANAGER
+// ==========================================
+const Auth = {
+    currentUser: null,
+
+    async init() {
+        if (!supabaseClient) return;
+
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            this.currentUser = session?.user || null;
+            this.updateUI();
+
+            supabaseClient.auth.onAuthStateChange((event, session) => {
+                this.currentUser = session?.user || null;
+                this.updateUI();
+                if (event === 'SIGNED_IN') {
+                    SyncManager.syncFromCloud();
+                }
+            });
+        } catch (err) {
+            console.error("Lỗi xác thực Auth:", err);
+        }
+    },
+
+    updateUI() {
+        const loginSection = document.getElementById('loginSection');
+        const userInfo = document.getElementById('userInfo');
+        const userEmail = document.getElementById('userEmail');
+
+        if (this.currentUser) {
+            if (loginSection) loginSection.style.display = 'none';
+            if (userInfo) userInfo.style.display = 'flex';
+            if (userEmail) userEmail.textContent = this.currentUser.email;
+        } else {
+            if (loginSection) loginSection.style.display = 'block';
+            if (userInfo) userInfo.style.display = 'none';
+        }
+    },
+
+    async signInWithGoogle() {
+        if (!supabaseClient) {
+            Utils.showToast("Chưa cấu hình Supabase Client!");
+            return;
+        }
+        const { error } = await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin + window.location.pathname
+            }
+        });
+        if (error) Utils.showToast('Lỗi đăng nhập: ' + error.message);
+    },
+
+    async signOut() {
+        if (!supabaseClient) return;
+        await supabaseClient.auth.signOut();
+        this.currentUser = null;
+        this.updateUI();
+        Utils.showToast('Đã đăng xuất!');
+    }
+};
+
+const SyncManager = {
+    isSyncing: false,
+
+    async uploadSingleMedia(mediaObj) {
+        if (!Auth.currentUser || !supabaseClient) return;
+        if (mediaObj.sync_status === 'synced') return;
+
+        try {
+            const userId = Auth.currentUser.id;
+            const cleanStudent = Utils.removeVietnameseTones(mediaObj.studentName || 'student');
+            const filePath = `${userId}/${cleanStudent}/${mediaObj.fileName}`;
+            const fileToUpload = new File([mediaObj.blob], mediaObj.fileName, { type: mediaObj.blob.type });
+
+            // 1. Upload file lên Storage
+            const { error: uploadError } = await supabaseClient.storage
+                .from('media')
+                .upload(filePath, fileToUpload, { upsert: true });
+
+            if (uploadError) throw uploadError;
+
+            // 2. Lấy URL Public
+            const { data: { publicUrl } } = supabaseClient.storage
+                .from('media')
+                .getPublicUrl(filePath);
+
+            // 3. Lưu bản ghi metadata vào Database
+            const { error: dbError } = await supabaseClient
+                .from('media_files')
+                .upsert({
+                    user_id: userId,
+                    student_name: mediaObj.studentName,
+                    file_name: mediaObj.fileName,
+                    file_url: publicUrl,
+                    file_type: mediaObj.type,
+                    file_path: filePath,
+                    created_at: new Date(mediaObj.timestamp).toISOString()
+                }, { onConflict: 'file_path' });
+
+            if (dbError) throw dbError;
+
+            // 4. Cập nhật trạng thái Local
+            mediaObj.sync_status = 'synced';
+            mediaObj.file_path = filePath;
+            await db.saveMedia(mediaObj);
+            
+            if (typeof App !== 'undefined' && App.activeTab === 'tab-gallery') {
+                App.loadGallery();
+            }
+        } catch (err) {
+            console.error("Lỗi upload media nền:", err);
+            mediaObj.sync_status = 'failed';
+            await db.saveMedia(mediaObj);
+        }
+    },
+
+    async syncFromCloud() {
+        if (!Auth.currentUser || !supabaseClient || this.isSyncing) return;
+        this.isSyncing = true;
+
+        try {
+            const { data: cloudFiles, error } = await supabaseClient
+                .from('media_files')
+                .select('*')
+                .eq('user_id', Auth.currentUser.id)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            if (cloudFiles && cloudFiles.length > 0) {
+                const localMedia = await db.getAllMedia();
+                const localMap = new Map(localMedia.map(m => [m.fileName, m]));
+
+                for (const file of cloudFiles) {
+                    if (!localMap.has(file.file_name)) {
+                        try {
+                            const res = await fetch(file.file_url);
+                            const blob = await res.blob();
+                            const mediaObj = {
+                                id: new Date(file.created_at).getTime().toString(),
+                                type: file.file_type,
+                                blob: blob,
+                                studentName: file.student_name || 'Khách',
+                                fileName: file.file_name,
+                                timestamp: new Date(file.created_at).getTime(),
+                                sync_status: 'synced',
+                                file_path: file.file_path
+                            };
+                            await db.saveMedia(mediaObj);
+                        } catch (e) {
+                            console.error("Không thể tải file từ cloud:", file.file_name);
+                        }
+                    }
+                }
+                if (typeof App !== 'undefined') App.loadGallery();
+            }
+        } catch (err) {
+            console.error("Lỗi đồng bộ từ Cloud:", err);
+        } finally {
+            this.isSyncing = false;
+        }
+    }
+};
+
+// ==========================================
+// 5. MAIN APPLICATION CONTROLLER
 // ==========================================
 const App = {
     settings: {
-        unitName: 'TRƯỜNG TIỂU HỌC TRẦN QUỐC TOẢN', // Default customized as requested
+        unitName: 'TRƯỜNG TIỂU HỌC TRẦN QUỐC TOẢN',
         showUnit: true,
         showDate: true,
         position: 'bottom',
         align: 'center',
-        fontSize: 40,
+        fontSize: 32,
         color: '#ffffff',
         bgColor: 'rgba(0,0,0,0.5)'
     },
     currentStudent: null,
-    cameraFacingMode: 'environment', // Mặc định camera sau
+    cameraFacingMode: 'environment',
     mediaRecorder: null,
     recordedChunks: [],
     isRecording: false,
@@ -166,18 +382,20 @@ const App = {
     recordTimer: null,
     rawStream: null,
     animationFrameId: null,
+    activeTab: 'tab-camera',
 
     async init() {
         try {
             await db.init();
             await this.loadSettings();
-            this.bindEvents();
             this.initSettingsUI();
+            this.bindEvents();
+            await Auth.init();
             await this.loadStudentList();
             await this.loadGallery();
             this.startCamera();
         } catch (error) {
-            Utils.showToast("Lỗi khởi tạo hệ thống!");
+            Utils.showToast("Khởi tạo ứng dụng thất bại!");
             console.error(error);
         }
     },
@@ -188,17 +406,17 @@ const App = {
     },
 
     async saveSettings() {
-        this.settings.unitName = document.getElementById('setUnitName').value;
+        this.settings.unitName = document.getElementById('setUnitName').value.trim();
         this.settings.showUnit = document.getElementById('setShowUnit').checked;
         this.settings.showDate = document.getElementById('setShowDate').checked;
         this.settings.position = document.getElementById('setPosition').value;
         this.settings.align = document.getElementById('setAlign').value;
-        this.settings.fontSize = parseInt(document.getElementById('setFontSize').value);
+        this.settings.fontSize = parseInt(document.getElementById('setFontSize').value) || 32;
         this.settings.color = document.getElementById('setColor').value;
         this.settings.bgColor = document.getElementById('setBgColor').value;
-        
+
         await db.setSetting('appSettings', this.settings);
-        Utils.showToast('Đã lưu cấu hình!');
+        Utils.showToast('Đã lưu cấu hình Watermark!');
     },
 
     initSettingsUI() {
@@ -213,62 +431,85 @@ const App = {
     },
 
     bindEvents() {
-        // Navigation
+        // Auth Buttons
+        document.getElementById('btnLoginGoogle')?.addEventListener('click', () => Auth.signInWithGoogle());
+        document.getElementById('btnLogout')?.addEventListener('click', () => Auth.signOut());
+
+        // Bottom Navigation
         document.querySelectorAll('.nav-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-                
                 const target = e.currentTarget.dataset.target;
-                e.currentTarget.classList.add('active');
-                document.getElementById(target).classList.add('active');
-                
-                // Quản lý tài nguyên camera khi chuyển tab
-                if(target === 'tab-camera') this.startCamera();
-                else this.stopCamera();
-
-                if(target === 'tab-gallery') this.loadGallery();
+                this.switchTab(target);
             });
         });
 
         // Settings
-        document.getElementById('btnSaveSettings').addEventListener('click', () => this.saveSettings());
+        document.getElementById('btnSaveSettings')?.addEventListener('click', () => this.saveSettings());
 
-        // Students List
-        document.getElementById('excelUpload').addEventListener('change', (e) => this.handleExcelImport(e));
-        document.getElementById('btnClearList').addEventListener('click', () => this.clearStudents());
-        document.getElementById('btnAddManual').addEventListener('click', () => this.addManualStudent());
-        document.getElementById('searchStudent').addEventListener('input', (e) => this.filterStudents(e.target.value));
-        // Thêm nút tải file mẫu
-        document.getElementById('btnDownloadSample').addEventListener('click', () => this.downloadSampleExcel());
-        
-        // Hỗ trợ nhấn Enter để thêm tên thủ công nhanh hơn
-        document.getElementById('manualName').addEventListener('keypress', (e) => {
+        // Student Management
+        document.getElementById('excelUpload')?.addEventListener('change', (e) => this.handleExcelImport(e));
+        document.getElementById('btnDownloadSample')?.addEventListener('click', () => this.downloadSampleExcel());
+        document.getElementById('btnClearList')?.addEventListener('click', () => this.clearStudents());
+        document.getElementById('btnAddManual')?.addEventListener('click', () => this.addManualStudent());
+        document.getElementById('searchStudent')?.addEventListener('input', (e) => this.loadStudentList(e.target.value));
+        document.getElementById('manualName')?.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.addManualStudent();
         });
 
         // Camera Controls
-        document.getElementById('btnSwitchCamera').addEventListener('click', () => this.switchCamera());
-        document.getElementById('btnCapturePhoto').addEventListener('click', () => this.takePhoto());
-        document.getElementById('btnRecordVideo').addEventListener('click', () => this.toggleRecordVideo());
+        document.getElementById('btnSwitchCamera')?.addEventListener('click', () => this.switchCamera());
+        document.getElementById('btnCapturePhoto')?.addEventListener('click', () => this.takePhoto());
+        document.getElementById('btnRecordVideo')?.addEventListener('click', () => this.toggleRecordVideo());
 
-        // Gallery
-        document.getElementById('btnExportSelected').addEventListener('click', () => this.exportSelectedMedia());
-        document.getElementById('btnDeleteSelected').addEventListener('click', () => this.deleteSelectedMedia());
-        document.getElementById('filterType').addEventListener('change', () => this.loadGallery());
+        // Gallery Actions
+        document.getElementById('btnExportSelected')?.addEventListener('click', () => this.exportSelectedMedia());
+        document.getElementById('btnDeleteSelected')?.addEventListener('click', () => this.deleteSelectedMedia());
+        document.getElementById('filterType')?.addEventListener('change', () => this.loadGallery());
+
+        // Modals Close
+        document.getElementById('closeImageModal')?.addEventListener('click', () => {
+            document.getElementById('imageModal').style.display = 'none';
+        });
+        document.getElementById('closeVideoModal')?.addEventListener('click', () => {
+            const modal = document.getElementById('videoModal');
+            const video = document.getElementById('modalVideo');
+            modal.style.display = 'none';
+            video.pause();
+            video.src = '';
+        });
+    },
+
+    switchTab(targetTabId) {
+        this.activeTab = targetTabId;
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+
+        const currentNavBtn = document.querySelector(`.nav-btn[data-target="${targetTabId}"]`);
+        if (currentNavBtn) currentNavBtn.classList.add('active');
+        document.getElementById(targetTabId)?.classList.add('active');
+
+        if (targetTabId === 'tab-camera') {
+            this.startCamera();
+        } else {
+            this.stopCamera();
+        }
+
+        if (targetTabId === 'tab-gallery') {
+            this.loadGallery();
+        }
     },
 
     // ==========================================
-    // MODULE: CAMERA & CANVAS PROCESSING
+    // CAMERA & WATERMARK RENDERING
     // ==========================================
     async startCamera() {
-        if(this.rawStream) return; // Đang chạy rồi
+        if (this.rawStream) return;
+
         const video = document.getElementById('rawVideo');
-        
         try {
             const constraints = {
                 video: { facingMode: this.cameraFacingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-                audio: true 
+                audio: true
             };
             this.rawStream = await navigator.mediaDevices.getUserMedia(constraints);
             video.srcObject = this.rawStream;
@@ -277,96 +518,124 @@ const App = {
                 this.startCanvasLoop();
             };
         } catch (err) {
-            Utils.showToast('Không thể mở Camera/Mic. Vui lòng cấp quyền!');
+            Utils.showToast("Không thể truy cập Camera/Microphone!");
             console.error(err);
         }
     },
 
     stopCamera() {
-        if(this.isRecording) this.toggleRecordVideo(); // Stop recording if switching tab
-        if(this.rawStream) {
+        if (this.isRecording) this.stopRecording();
+        if (this.rawStream) {
             this.rawStream.getTracks().forEach(track => track.stop());
             this.rawStream = null;
         }
-        if(this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
     },
 
     switchCamera() {
         this.stopCamera();
-        this.cameraFacingMode = this.cameraFacingMode === 'environment' ? 'user' : 'environment';
+        this.cameraFacingMode = (this.cameraFacingMode === 'environment') ? 'user' : 'environment';
         this.startCamera();
     },
 
     startCanvasLoop() {
         const video = document.getElementById('rawVideo');
         const canvas = document.getElementById('outputCanvas');
+        if (!canvas) return;
         const ctx = canvas.getContext('2d');
 
-        const draw = () => {
-            if(video.readyState === video.HAVE_ENOUGH_DATA) {
-                // 1. Cập nhật kích thước canvas khớp với video
+        const render = () => {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
                 if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                 }
-                
-                // 2. CHỈ vẽ video thuần túy lên canvas
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                
-                // 3. ĐÃ XÓA/TẮT LỆNH VẼ CHỮ (renderTextOverlay)
-                // // this.renderTextOverlay(ctx, canvas); 
+                this.drawWatermark(ctx, canvas);
             }
-            this.animationFrameId = requestAnimationFrame(draw);
+            if (this.rawStream) {
+                this.animationFrameId = requestAnimationFrame(render);
+            }
         };
-        draw();
+        render();
     },
 
-    renderTextOverlay(ctx, canvas) {
-        if (!this.currentStudent) return;
-        
-        // 1. Lấy kích thước thực từ canvas
-        const w = canvas.width;
-        const h = canvas.height;
-        
-        const text = this.currentStudent.name.toUpperCase();
-        
-        // 2. Tính toán font size tỉ lệ theo chiều cao video (để chữ luôn sắc nét)
-        const fontSize = Math.floor(h * 0.04); 
-        ctx.font = `bold ${fontSize}px Arial`;
-        
-        // 3. Tính toán kích thước hộp chứa
-        const padding = 20;
-        const textWidth = ctx.measureText(text).width;
-        const boxWidth = textWidth + (padding * 2);
-        const boxHeight = fontSize + (padding * 2);
-        
-        // 4. Ép vị trí cố định: Góc dưới bên phải (cách mép 40px)
-        const boxX = w - boxWidth - 40;
-        const boxY = h - boxHeight - 40;
+    drawWatermark(ctx, canvas) {
+        const lines = [];
+        if (this.settings.showUnit && this.settings.unitName) {
+            lines.push(this.settings.unitName.toUpperCase());
+        }
+        if (this.currentStudent) {
+            lines.push(`HỌ TÊN: ${this.currentStudent.name.toUpperCase()}`);
+        }
+        if (this.settings.showDate) {
+            lines.push(Utils.formatDateDisplay(new Date()));
+        }
 
-        // 5. Vẽ nền đen mờ
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+        if (lines.length === 0) return;
 
-        // 6. Vẽ chữ trắng
-        ctx.fillStyle = '#FFFFFF';
+        ctx.save();
+        const fontSize = parseInt(this.settings.fontSize) || 32;
+        ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+
+        const lineHeight = fontSize * 1.35;
+        let maxWidth = 0;
+        lines.forEach(line => {
+            const w = ctx.measureText(line).width;
+            if (w > maxWidth) maxWidth = w;
+        });
+
+        const padding = 14;
+        const boxWidth = maxWidth + (padding * 2);
+        const boxHeight = (lines.length * lineHeight) + (padding * 0.5);
+
+        let x = 20;
+        let y = 20;
+
+        if (this.settings.align === 'center') {
+            x = (canvas.width - boxWidth) / 2;
+        } else if (this.settings.align === 'right') {
+            x = canvas.width - boxWidth - 20;
+        }
+
+        if (this.settings.position === 'center') {
+            y = (canvas.height - boxHeight) / 2;
+        } else if (this.settings.position === 'bottom') {
+            y = canvas.height - boxHeight - 20;
+        }
+
+        // Vẽ nền chữ
+        ctx.fillStyle = this.settings.bgColor || 'rgba(0,0,0,0.5)';
+        ctx.fillRect(x, y, boxWidth, boxHeight);
+
+        // Vẽ từng dòng chữ
+        ctx.fillStyle = this.settings.color || '#ffffff';
         ctx.textBaseline = 'top';
         ctx.textAlign = 'left';
-        ctx.fillText(text, boxX + padding, boxY + padding);
+
+        lines.forEach((line, index) => {
+            ctx.fillText(line, x + padding, y + (padding / 2) + (index * lineHeight));
+        });
+
+        ctx.restore();
     },
 
     // ==========================================
-    // MODULE: MEDIA CAPTURE
+    // CAPTURE PHOTO & RECORD VIDEO
     // ==========================================
     async takePhoto() {
-        if(!this.currentStudent) {
+        if (!this.currentStudent) {
             Utils.showToast("Vui lòng chọn học sinh trước khi chụp!");
-            document.querySelector('[data-target="tab-list"]').click(); // Chuyển sang tab chọn
+            this.switchTab('tab-list');
             return;
         }
 
         const canvas = document.getElementById('outputCanvas');
         canvas.toBlob(async (blob) => {
+            if (!blob) return;
             const timestamp = Date.now();
             const cleanName = Utils.removeVietnameseTones(this.currentStudent.name);
             const fileName = `${cleanName}_${Utils.formatDateForFile(timestamp)}.jpg`;
@@ -377,56 +646,50 @@ const App = {
                 blob: blob,
                 studentName: this.currentStudent.name,
                 fileName: fileName,
-                timestamp: timestamp
+                timestamp: timestamp,
+                sync_status: 'pending'
             };
 
             await db.saveMedia(mediaData);
             Utils.showToast(`Đã lưu ảnh: ${this.currentStudent.name}`);
-            
-            // Hiệu ứng nháy flash
-            canvas.style.opacity = '0';
-            setTimeout(() => canvas.style.opacity = '1', 100);
-        }, 'image/jpeg', 0.9);
+
+            // Đẩy lên cloud nếu đã đăng nhập
+            SyncManager.uploadSingleMedia(mediaData);
+
+            // Hiệu ứng Flash
+            canvas.style.opacity = '0.2';
+            setTimeout(() => canvas.style.opacity = '1', 120);
+        }, 'image/jpeg', 0.92);
     },
 
     toggleRecordVideo() {
-        if(!this.currentStudent) {
+        if (!this.currentStudent) {
             Utils.showToast("Vui lòng chọn học sinh trước khi quay!");
+            this.switchTab('tab-list');
             return;
         }
 
-        const btn = document.getElementById('btnRecordVideo');
-        if(!this.isRecording) {
+        if (!this.isRecording) {
             this.startRecording();
-            btn.innerHTML = '<i class="fa-solid fa-stop"></i> DỪNG';
-            btn.classList.replace('btn-danger', 'btn-secondary');
         } else {
             this.stopRecording();
-            btn.innerHTML = '<i class="fa-solid fa-video"></i> QUAY';
-            btn.classList.replace('btn-secondary', 'btn-danger');
         }
     },
 
     startRecording() {
         const canvas = document.getElementById('outputCanvas');
-        let canvasStream;
-        
         try {
-            // Lấy stream hình ảnh đã đóng chữ từ canvas (30fps)
-            canvasStream = canvas.captureStream(30); 
-            
-            // Trích xuất audio track từ camera gốc để có tiếng
-            const audioTracks = this.rawStream.getAudioTracks();
+            const canvasStream = canvas.captureStream(30);
+            const audioTracks = this.rawStream ? this.rawStream.getAudioTracks() : [];
             const combinedStream = new MediaStream([...canvasStream.getTracks(), ...audioTracks]);
 
-            // Cấu hình MediaRecorder (ưu tiên mp4/webm)
-            const options = { mimeType: 'video/webm; codecs=vp8,opus' };
-            if(!MediaRecorder.isTypeSupported(options.mimeType)) {
-                // Fallback cho Safari
-                options.mimeType = 'video/mp4'; 
+            const mimeType = Utils.getSupportedMimeType();
+            if (!mimeType) {
+                Utils.showToast("Trình duyệt không hỗ trợ quay phim!");
+                return;
             }
 
-            this.mediaRecorder = new MediaRecorder(combinedStream, options);
+            this.mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
             this.recordedChunks = [];
 
             this.mediaRecorder.ondataavailable = (e) => {
@@ -434,10 +697,10 @@ const App = {
             };
 
             this.mediaRecorder.onstop = async () => {
-                const blob = new Blob(this.recordedChunks, { type: this.mediaRecorder.mimeType });
+                const blob = new Blob(this.recordedChunks, { type: mimeType });
                 const timestamp = Date.now();
                 const cleanName = Utils.removeVietnameseTones(this.currentStudent.name);
-                const ext = this.mediaRecorder.mimeType.includes('mp4') ? 'mp4' : 'webm';
+                const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
                 const fileName = `${cleanName}_${Utils.formatDateForFile(timestamp)}.${ext}`;
 
                 const mediaData = {
@@ -446,85 +709,132 @@ const App = {
                     blob: blob,
                     studentName: this.currentStudent.name,
                     fileName: fileName,
-                    timestamp: timestamp
+                    timestamp: timestamp,
+                    sync_status: 'pending'
                 };
 
                 await db.saveMedia(mediaData);
                 Utils.showToast(`Đã lưu video: ${this.currentStudent.name}`);
+                SyncManager.uploadSingleMedia(mediaData);
             };
 
             this.mediaRecorder.start();
             this.isRecording = true;
-            
-            // UI Update
-            this.recordStartTime = Date.now();
+
+            // Cập nhật giao diện Nút quay
+            const btn = document.getElementById('btnRecordVideo');
+            btn.innerHTML = '<i class="fa-solid fa-square"></i> DỪNG';
+            btn.classList.replace('btn-danger', 'btn-secondary');
+
             document.getElementById('recordingIndicator').classList.remove('hidden');
+            this.recordStartTime = Date.now();
             this.recordTimer = setInterval(() => {
                 const diff = Math.floor((Date.now() - this.recordStartTime) / 1000);
-                const mins = String(Math.floor(diff / 60)).padStart(2,'0');
-                const secs = String(diff % 60).padStart(2,'0');
+                const mins = String(Math.floor(diff / 60)).padStart(2, '0');
+                const secs = String(diff % 60).padStart(2, '0');
                 document.getElementById('recordingTime').textContent = `${mins}:${secs}`;
             }, 1000);
 
         } catch (err) {
-            Utils.showToast("Trình duyệt không hỗ trợ ghi video có chữ trực tiếp!");
+            Utils.showToast("Không thể khởi chạy bộ ghi hình!");
             console.error(err);
         }
     },
 
     stopRecording() {
-        if(this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
             this.mediaRecorder.stop();
         }
         this.isRecording = false;
         clearInterval(this.recordTimer);
+
+        const btn = document.getElementById('btnRecordVideo');
+        if (btn) {
+            btn.innerHTML = '<i class="fa-solid fa-video"></i> QUAY';
+            btn.classList.replace('btn-secondary', 'btn-danger');
+        }
+
         document.getElementById('recordingIndicator').classList.add('hidden');
         document.getElementById('recordingTime').textContent = '00:00';
     },
 
     // ==========================================
-    // MODULE: STUDENT LIST (EXCEL)
+    // STUDENT MANAGEMENT
     // ==========================================
     handleExcelImport(e) {
         const file = e.target.files[0];
-        if(!file) return;
+        if (!file) return;
 
         const reader = new FileReader();
         reader.onload = async (evt) => {
             try {
                 const data = new Uint8Array(evt.target.result);
-                const workbook = XLSX.read(data, {type: 'array'});
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
+                const workbook = XLSX.read(data, { type: 'array' });
+                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                 const json = XLSX.utils.sheet_to_json(worksheet);
 
-                // Tìm cột chứa Tên (tự động nhận diện các header phổ biến)
-                let nameKey = null;
-                if(json.length > 0) {
-                    const keys = Object.keys(json[0]);
-                    nameKey = keys.find(k => k.toLowerCase().includes('tên') || k.toLowerCase().includes('name')) || keys[1]; // fallback cột 2
-                }
-
-                if(!nameKey) {
-                    Utils.showToast("Không tìm thấy cột Tên trong Excel!");
+                if (json.length === 0) {
+                    Utils.showToast("File Excel rỗng!");
                     return;
                 }
 
-                const newStudents = json.map(row => ({
-                    id: Date.now() + Math.random().toString(16).slice(2),
-                    name: row[nameKey],
-                    class: row['Lớp'] || row['Class'] || ''
+                const keys = Object.keys(json[0]);
+                const nameKey = keys.find(k => k.toLowerCase().includes('tên') || k.toLowerCase().includes('name')) || keys[1] || keys[0];
+
+                const newStudents = json.map((row, idx) => ({
+                    id: (Date.now() + idx).toString(),
+                    name: String(row[nameKey] || '').trim(),
+                    class: String(row['Lớp'] || row['Class'] || '').trim()
                 })).filter(s => s.name);
 
                 await db.saveStudents(newStudents);
-                Utils.showToast(`Đã nhập ${newStudents.length} học sinh!`);
-                e.target.value = ''; // Reset input
+                Utils.showToast(`Đã nhập ${newStudents.length} học sinh thành công!`);
+                e.target.value = '';
                 this.loadStudentList();
-            } catch(err) {
-                Utils.showToast("File Excel không hợp lệ!");
+            } catch (err) {
+                Utils.showToast("Cấu trúc File Excel không hợp lệ!");
             }
         };
         reader.readAsArrayBuffer(file);
+    },
+
+    downloadSampleExcel() {
+        const sampleData = [
+            { "STT": 1, "Họ và tên": "Nguyễn Văn An", "Lớp": "5A" },
+            { "STT": 2, "Họ và tên": "Trần Văn Bình", "Lớp": "5A" },
+            { "STT": 3, "Họ và tên": "Lê Thị Hoa", "Lớp": "5B" }
+        ];
+        const worksheet = XLSX.utils.json_to_sheet(sampleData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Danh_sach_mau");
+        XLSX.writeFile(workbook, "Danh_Sach_Hoc_Sinh_Mau.xlsx");
+        Utils.showToast("Đã tải file Excel mẫu!");
+    },
+
+    async addManualStudent() {
+        const input = document.getElementById('manualName');
+        const name = input.value.trim();
+        if (!name) {
+            Utils.showToast("Vui lòng nhập họ tên học sinh!");
+            return;
+        }
+
+        const student = { id: Date.now().toString(), name, class: '' };
+        await db.saveStudents([student]);
+        input.value = '';
+        input.focus();
+        this.loadStudentList();
+        Utils.showToast(`Đã thêm: ${name}`);
+    },
+
+    async clearStudents() {
+        if (confirm("Bạn có chắc chắn muốn xóa toàn bộ danh sách học sinh?")) {
+            await db.clearStudents();
+            this.currentStudent = null;
+            document.getElementById('headerStudentName').textContent = "Chưa chọn học sinh";
+            this.loadStudentList();
+            Utils.showToast("Đã xóa danh sách!");
+        }
     },
 
     async loadStudentList(filterText = '') {
@@ -534,184 +844,163 @@ const App = {
 
         const filtered = list.filter(s => s.name.toLowerCase().includes(filterText.toLowerCase()));
 
+        if (filtered.length === 0) {
+            ul.innerHTML = '<li style="justify-content:center; color:#888;">Chưa có dữ liệu học sinh</li>';
+            return;
+        }
+
         filtered.forEach(student => {
             const li = document.createElement('li');
-            li.innerHTML = `
-                <span><strong>${student.name}</strong> ${student.class ? `(${student.class})` : ''}</span>
-            `;
-            if(this.currentStudent && this.currentStudent.id === student.id) {
+            if (this.currentStudent && this.currentStudent.id === student.id) {
                 li.classList.add('selected');
             }
+
+            li.innerHTML = `
+                <span><strong>${student.name}</strong> ${student.class ? `(${student.class})` : ''}</span>
+                <i class="fa-solid fa-circle-check" style="color: ${this.currentStudent?.id === student.id ? '#007bff' : '#555'}"></i>
+            `;
 
             li.addEventListener('click', () => {
                 this.currentStudent = student;
                 document.getElementById('headerStudentName').textContent = student.name;
-                // Chuyển nhanh qua Camera
-                document.querySelector('[data-target="tab-camera"]').click();
-                this.loadStudentList(filterText); // Re-render to show selection
+                this.loadStudentList(filterText);
+                this.switchTab('tab-camera');
             });
 
             ul.appendChild(li);
         });
     },
 
-    filterStudents(text) {
-        this.loadStudentList(text);
-    },
-
-    // --- 1. Hàm tạo và tải file Excel mẫu ---
-    downloadSampleExcel() {
-        // Dữ liệu mẫu
-        const sampleData = [
-            { "STT": 1, "Họ và tên": "Nguyễn Văn An", "Lớp": "5A" },
-            { "STT": 2, "Họ và tên": "Trần Văn Bình", "Lớp": "5A" },
-            { "STT": 3, "Họ và tên": "Lê Thị Hoa", "Lớp": "5A" },
-            { "STT": 4, "Họ và tên": "Phạm Tuấn Kiệt", "Lớp": "5A" }
-        ];
-        
-        // Sử dụng thư viện XLSX đã import để tạo file
-        const worksheet = XLSX.utils.json_to_sheet(sampleData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Danh_sach_mau");
-        
-        // Tải xuống
-        XLSX.writeFile(workbook, "Danh_sach_lop_mau.xlsx");
-        Utils.showToast("Đã tải file Excel mẫu xuống máy!");
-    },
-
-    // --- 2. Hàm thêm học sinh thủ công ---
-    async addManualStudent() {
-        const input = document.getElementById('manualName');
-        const name = input.value.trim();
-        
-        // Kiểm tra nếu người dùng chưa nhập gì
-        if(!name) {
-            Utils.showToast("Vui lòng nhập tên học sinh!");
-            return;
-        }
-
-        const s = { id: Date.now().toString(), name: name, class: '' };
-        await db.saveStudents([s]);
-        
-        input.value = ''; // Xóa trắng ô nhập để nhập người tiếp theo
-        input.focus();    // Giữ con trỏ chuột ở ô nhập
-        
-        this.loadStudentList();
-        Utils.showToast(`Đã thêm học sinh: ${name}`); // Thông báo thành công rõ ràng
-    },
-
-    // --- 3. Hàm xóa toàn bộ danh sách (ĐÃ BỔ SUNG LẠI) ---
-    async clearStudents() {
-        if(confirm("Bạn có chắc chắn muốn xóa toàn bộ danh sách?")) {
-            await db.clearStudents();
-            this.currentStudent = null;
-            document.getElementById('headerStudentName').textContent = "Chưa chọn học sinh";
-            this.loadStudentList();
-            Utils.showToast("Đã xóa toàn bộ danh sách!");
-        }
-    },
-
     // ==========================================
-    // MODULE: GALLERY & EXPORT
+    // GALLERY & EXPORT ZIP
     // ==========================================
     async loadGallery() {
-        const typeFilter = document.getElementById('filterType').value;
-        let mediaList = await db.getAllMedia();
-        
-        if(typeFilter !== 'all') {
-            mediaList = mediaList.filter(m => m.type === typeFilter);
+        const filter = document.getElementById('filterType').value;
+        let list = await db.getAllMedia();
+
+        if (filter !== 'all') {
+            list = list.filter(m => m.type === filter);
         }
 
         const grid = document.getElementById('galleryGrid');
         grid.innerHTML = '';
 
-        mediaList.forEach(media => {
+        if (list.length === 0) {
+            grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #888; padding: 30px;">Chưa có ảnh/video nào</p>';
+            return;
+        }
+
+        list.forEach(media => {
             const item = document.createElement('div');
             item.className = 'gallery-item';
-            
+
             const url = URL.createObjectURL(media.blob);
-            let mediaElement;
-            
-            if(media.type === 'photo') {
-                mediaElement = `<img src="${url}" alt="${media.studentName}">
-                                <div class="media-icon"><i class="fa-solid fa-image"></i></div>`;
-            } else {
-                mediaElement = `<video src="${url}" preload="metadata"></video>
-                                <div class="media-icon"><i class="fa-solid fa-video"></i></div>`;
-            }
+            const isSynced = media.sync_status === 'synced';
+            const syncIcon = isSynced 
+                ? '<span class="sync-badge synced"><i class="fa-solid fa-cloud-check"></i></span>'
+                : '<span class="sync-badge pending"><i class="fa-solid fa-cloud-arrow-up"></i></span>';
+
+            const mediaTag = media.type === 'photo' 
+                ? `<img src="${url}" alt="${media.studentName}">`
+                : `<video src="${url}" preload="metadata"></video>`;
 
             item.innerHTML = `
-                <input type="checkbox" class="gallery-checkbox" data-id="${media.id}" data-filename="${media.fileName}">
-                ${mediaElement}
+                <input type="checkbox" class="gallery-checkbox" data-id="${media.id}">
+                ${syncIcon}
+                ${mediaTag}
                 <div class="gallery-info">
-                    <div><b>${media.studentName}</b></div>
-                    <div style="font-size: 0.8em; color: #aaa">${Utils.formatDateDisplay(media.timestamp)}</div>
+                    <strong>${media.studentName}</strong>
                 </div>
             `;
 
-            // Click vào ảnh/video để xem
-            item.querySelector('img, video').addEventListener('click', () => this.viewMedia(url, media.type, media.fileName, media.blob));
-            
+            item.querySelector('img, video').addEventListener('click', () => this.viewMedia(url, media.type, media.fileName));
             grid.appendChild(item);
         });
     },
 
-    viewMedia(url, type, fileName, blob) {
-        if(type === 'photo') {
+    viewMedia(url, type, fileName) {
+        if (type === 'photo') {
             const modal = document.getElementById('imageModal');
-            const modalImg = document.getElementById('modalImg');
-            const caption = document.getElementById('modalCaption');
-            
+            const img = document.getElementById('modalImg');
+            const cap = document.getElementById('modalCaption');
+            img.src = url;
+            cap.textContent = fileName;
             modal.style.display = 'flex';
-            modalImg.src = url;
-            caption.textContent = fileName;
         } else {
-            // Với video, mở trong tab mới để xem
-            window.open(url, '_blank');
+            const modal = document.getElementById('videoModal');
+            const video = document.getElementById('modalVideo');
+            const cap = document.getElementById('modalVideoCaption');
+            video.src = url;
+            cap.textContent = fileName;
+            modal.style.display = 'flex';
+            video.play();
         }
     },
 
     async exportSelectedMedia() {
         const checkboxes = document.querySelectorAll('.gallery-checkbox:checked');
-        if(checkboxes.length === 0) {
-            Utils.showToast("Vui lòng chọn ít nhất 1 file để xuất!");
+        if (checkboxes.length === 0) {
+            Utils.showToast("Vui lòng chọn ít nhất 1 file để xuất ZIP!");
             return;
         }
 
-        Utils.showToast("Đang nén file ZIP, vui lòng đợi...");
+        Utils.showToast("Đang nén file ZIP, xin chờ...");
         const zip = new JSZip();
         const mediaList = await db.getAllMedia();
+        let addedCount = 0;
 
-        checkboxes.forEach((cb, index) => {
-            const id = cb.dataset.id;
-            const item = mediaList.find(m => m.id === id);
-            if(item) {
-                // Thêm index ở đầu để tránh trùng tên nếu trùng tên học sinh
-                const safeName = `${String(index + 1).padStart(3, '0')}_${item.fileName}`;
-                zip.file(safeName, item.blob);
+        for (const cb of checkboxes) {
+            const media = mediaList.find(m => m.id === cb.dataset.id);
+            if (media && media.blob) {
+                zip.file(media.fileName, media.blob);
+                addedCount++;
             }
-        });
+        }
 
-        zip.generateAsync({type:"blob"}).then(function(content) {
-            saveAs(content, `MEDIA_EXPORT_${Utils.formatDateForFile(Date.now())}.zip`);
-            Utils.showToast("Đã xuất file ZIP thành công!");
-        });
+        if (addedCount > 0) {
+            const zipName = `Media_Name_Studio_${Utils.formatDateForFile(Date.now())}.zip`;
+            const content = await zip.generateAsync({ type: 'blob' });
+            saveAs(content, zipName);
+            Utils.showToast(`Đã xuất ZIP ${addedCount} file!`);
+        }
     },
 
     async deleteSelectedMedia() {
         const checkboxes = document.querySelectorAll('.gallery-checkbox:checked');
-        if(checkboxes.length === 0) return;
-
-        if(confirm(`Xóa ${checkboxes.length} file đã chọn?`)) {
-            const ids = Array.from(checkboxes).map(cb => cb.dataset.id);
-            await db.deleteMedia(ids);
-            this.loadGallery();
-            Utils.showToast("Đã xóa file!");
+        if (checkboxes.length === 0) {
+            Utils.showToast("Vui lòng chọn ít nhất 1 file để xóa!");
+            return;
         }
+
+        if (!confirm(`Bạn có chắc muốn xóa vĩnh viễn ${checkboxes.length} file đã chọn?`)) return;
+
+        const idsToDelete = Array.from(checkboxes).map(cb => cb.dataset.id);
+        const mediaList = await db.getAllMedia();
+
+        for (const id of idsToDelete) {
+            const media = mediaList.find(m => m.id === id);
+            if (media && Auth.currentUser && media.file_path) {
+                try {
+                    await supabaseClient.storage.from('media').remove([media.file_path]);
+                    await supabaseClient.from('media_files').delete().eq('file_path', media.file_path).eq('user_id', Auth.currentUser.id);
+                } catch (e) {
+                    console.error("Lỗi xóa file trên đám mây:", e);
+                }
+            }
+        }
+
+        await db.deleteMedia(idsToDelete);
+        await this.loadGallery();
+        Utils.showToast(`Đã xóa ${idsToDelete.length} file!`);
     }
 };
 
-// Khởi chạy ứng dụng khi DOM tải xong
-document.addEventListener('DOMContentLoaded', () => {
-    App.init();
+// ==========================================
+// 6. SINGLE INITIALIZATION ENTRY POINT
+// ==========================================
+window.addEventListener('DOMContentLoaded', () => {
+    if (!window.appInitialized) {
+        window.appInitialized = true;
+        App.init();
+    }
 });

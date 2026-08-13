@@ -3,23 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Media Name Studio</title>
-    <!-- Thư viện ngoài -->
+    <title>MEDIA NAME STUDIO</title>
+
+    <!-- 1. Thư viện Supabase JS (Tải trước script chính) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 2. Thư viện xử lý Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- 3. Thư viện nén ZIP và lưu file -->
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
-    <!-- Font & Icons -->
+    <!-- 4. Font & Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- HEADER -->
     <header class="app-header">
         <h1><i class="fa-solid fa-camera-retro"></i> MEDIA NAME STUDIO</h1>
         <div class="current-student-display" id="headerStudentName">Chưa chọn học sinh</div>
     </header>
 
+    <!-- AUTH CONTAINER -->
+    <div id="authContainer" class="auth-container">
+        <div id="userInfo" class="user-info" style="display: none;">
+            <span><i class="fa-solid fa-user-circle"></i> <strong id="userEmail"></strong></span>
+            <button id="btnLogout" class="btn btn-danger btn-sm"><i class="fa-solid fa-right-from-bracket"></i> Đăng xuất</button>
+        </div>
+        <div id="loginSection" class="login-section">
+            <p>Đăng nhập Google để tự động đồng bộ ảnh và video lên đám mây:</p>
+            <button id="btnLoginGoogle" class="btn btn-google">
+                <i class="fa-brands fa-google"></i> Đăng nhập bằng Google
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN APP TABS -->
     <main class="app-main">
-        <!-- TAB: CAMERA -->
+        <!-- TAB 1: CAMERA -->
         <section id="tab-camera" class="tab-content active">
             <div class="camera-container">
                 <video id="rawVideo" autoplay playsinline muted style="display: none;"></video>
@@ -31,75 +52,77 @@
             
             <div class="camera-controls">
                 <div class="control-row">
-                    <button class="btn icon-btn" id="btnSwitchCamera"><i class="fa-solid fa-rotate"></i></button>
+                    <button class="btn icon-btn" id="btnSwitchCamera" title="Đổi camera"><i class="fa-solid fa-rotate"></i></button>
                     <button class="btn btn-primary btn-large" id="btnCapturePhoto"><i class="fa-solid fa-camera"></i> CHỤP</button>
                     <button class="btn btn-danger btn-large" id="btnRecordVideo"><i class="fa-solid fa-video"></i> QUAY</button>
                 </div>
             </div>
         </section>
 
-        <!-- TAB: LIST -->
+        <!-- TAB 2: LIST -->
         <section id="tab-list" class="tab-content">
             <div class="panel">
-                <h2>Quản lý danh sách</h2>
+                <h2>Quản lý danh sách học sinh</h2>
                 <div class="list-actions">
                     <label for="excelUpload" class="btn btn-secondary">
                         <i class="fa-solid fa-file-excel"></i> Import Excel
                     </label>
                     <input type="file" id="excelUpload" accept=".xlsx, .xls, .csv" hidden>
-                    <!-- THÊM NÚT TẢI FILE MẪU Ở ĐÂY -->
+                    
                     <button class="btn btn-primary" id="btnDownloadSample" title="Tải file Excel mẫu">
                         <i class="fa-solid fa-download"></i> File mẫu
                     </button>
                     <button class="btn btn-danger" id="btnClearList"><i class="fa-solid fa-trash"></i> Xóa DS</button>
                 </div>
+
                 <div class="search-box">
                     <input type="text" id="searchStudent" placeholder="🔍 Tìm kiếm học sinh...">
                 </div>
+
                 <div class="add-manual">
                     <input type="text" id="manualName" placeholder="Nhập tên thủ công...">
-                    <button class="btn btn-primary" id="btnAddManual"><i class="fa-solid fa-plus"></i></button>
+                    <button class="btn btn-primary" id="btnAddManual"><i class="fa-solid fa-plus"></i> Thêm</button>
                 </div>
+
                 <ul id="studentList" class="data-list">
-                    <!-- Sinh tự động -->
+                    <!-- Danh sách học sinh sẽ được render ở đây -->
                 </ul>
             </div>
         </section>
 
-        <!-- TAB: GALLERY -->
+        <!-- TAB 3: GALLERY -->
         <section id="tab-gallery" class="tab-content">
             <div class="panel">
                 <h2>Thư viện Media</h2>
                 <div class="gallery-controls">
-                    <select id="filterType" class="form-control">
+                    <select id="filterType" class="form-control select-inline">
                         <option value="all">Tất cả</option>
                         <option value="photo">Chỉ Ảnh</option>
                         <option value="video">Chỉ Video</option>
                     </select>
                     <button class="btn btn-primary" id="btnExportSelected"><i class="fa-solid fa-file-zipper"></i> Xuất ZIP</button>
-                    <button class="btn btn-danger" id="btnDeleteSelected"><i class="fa-solid fa-trash"></i> Xóa</button>
+                    <button class="btn btn-danger" id="btnDeleteSelected"><i class="fa-solid fa-trash"></i> Xóa chọn</button>
                 </div>
                 <div class="gallery-grid" id="galleryGrid">
-                    <!-- Sinh tự động -->
+                    <!-- Các items media sẽ hiển thị ở đây -->
                 </div>
             </div>
         </section>
 
-        <!-- TAB: SETTINGS -->
+        <!-- TAB 4: SETTINGS -->
         <section id="tab-settings" class="tab-content">
             <div class="panel">
                 <h2>Cài đặt Watermark</h2>
                 <div class="form-group">
-                    <label>Tên hiển thị (Đơn vị/Trường):</label>
+                    <label for="setUnitName">Tên đơn vị / Trường học:</label>
                     <input type="text" id="setUnitName" class="form-control">
                 </div>
-                <div class="form-group">
-                    <label>Hiển thị:</label>
-                    <label><input type="checkbox" id="setShowUnit"> Hiện tên đơn vị</label><br>
-                    <label><input type="checkbox" id="setShowDate"> Hiện ngày giờ</label>
+                <div class="form-group checkbox-group">
+                    <label><input type="checkbox" id="setShowUnit"> Hiển thị tên đơn vị</label>
+                    <label><input type="checkbox" id="setShowDate"> Hiển thị ngày giờ thực</label>
                 </div>
                 <div class="form-group">
-                    <label>Vị trí:</label>
+                    <label for="setPosition">Vị trí Watermark:</label>
                     <select id="setPosition" class="form-control">
                         <option value="top">Phía trên</option>
                         <option value="bottom">Phía dưới</option>
@@ -107,48 +130,58 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Căn chỉnh:</label>
+                    <label for="setAlign">Căn chỉnh chữ:</label>
                     <select id="setAlign" class="form-control">
-                        <option value="left">Trái</option>
-                        <option value="center">Giữa</option>
-                        <option value="right">Phải</option>
+                        <option value="left">Căn trái</option>
+                        <option value="center">Căn giữa</option>
+                        <option value="right">Căn phải</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Cỡ chữ (px):</label>
-                    <input type="number" id="setFontSize" class="form-control" value="40">
+                    <label for="setFontSize">Cỡ chữ (px):</label>
+                    <input type="number" id="setFontSize" class="form-control" value="32" min="12" max="100">
                 </div>
                 <div class="form-group">
-                    <label>Màu chữ:</label>
-                    <input type="color" id="setColor" class="form-control" value="#ffffff">
+                    <label for="setColor">Màu chữ:</label>
+                    <input type="color" id="setColor" class="form-control color-picker" value="#ffffff">
                 </div>
                 <div class="form-group">
-                    <label>Màu nền & Độ trong suốt (RGBA):</label>
+                    <label for="setBgColor">Màu nền hộp chữ (RGBA):</label>
                     <input type="text" id="setBgColor" class="form-control" value="rgba(0,0,0,0.5)">
                 </div>
-                <button id="btnSaveSettings" class="btn btn-primary" style="width: 100%; padding: 15px; margin-top: 20px; cursor: pointer;">
-        <i class="fa-solid fa-save"></i> LƯU CẤU HÌNH
-    </button>
-                <button class="btn btn-primary w-100" id="btnSaveSettings"><i class="fa-solid fa-save"></i> Lưu Cài Đặt</button>
+                <button id="btnSaveSettings" class="btn btn-primary w-100 btn-large">
+                    <i class="fa-solid fa-floppy-disk"></i> LƯU CẤU HÌNH
+                </button>
             </div>
         </section>
     </main>
 
+    <!-- BOTTOM NAVIGATION -->
     <nav class="bottom-nav">
         <button class="nav-btn active" data-target="tab-camera"><i class="fa-solid fa-camera"></i> Camera</button>
-        <button class="nav-btn" data-target="tab-list"><i class="fa-solid fa-list"></i> Danh sách</button>
+        <button class="nav-btn" data-target="tab-list"><i class="fa-solid fa-list-check"></i> Danh sách</button>
         <button class="nav-btn" data-target="tab-gallery"><i class="fa-solid fa-images"></i> Thư viện</button>
-        <button class="nav-btn" data-target="tab-settings"><i class="fa-solid fa-gear"></i> Cài đặt</button>
+        <button class="nav-btn" data-target="tab-settings"><i class="fa-solid fa-sliders"></i> Cài đặt</button>
     </nav>
-    
-    <!-- Toast Notification -->
+
+    <!-- TOAST NOTIFICATION -->
     <div id="toast" class="toast hidden"></div>
+
+    <!-- MODAL XEM ẢNH -->
+    <div id="imageModal" class="modal">
+        <span class="modal-close" id="closeImageModal">&times;</span>
+        <img id="modalImg" class="modal-content" alt="Preview Image">
+        <div id="modalCaption" class="modal-caption"></div>
+    </div>
+
+    <!-- MODAL XEM VIDEO -->
+    <div id="videoModal" class="modal">
+        <span class="modal-close" id="closeVideoModal">&times;</span>
+        <video id="modalVideo" class="modal-content" controls></video>
+        <div id="modalVideoCaption" class="modal-caption"></div>
+    </div>
+
+    <!-- MAIN APP SCRIPT -->
     <script src="script.js"></script>
-    <!-- Modal xem ảnh -->
-<div id="imageModal" style="display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.9); align-items:center; justify-content:center;">
-    <span onclick="document.getElementById('imageModal').style.display='none'" style="position:absolute; top:20px; right:30px; color:#fff; font-size:40px; cursor:pointer;">&times;</span>
-    <img id="modalImg" style="max-width:90%; max-height:80%; border:2px solid #fff;">
-    <div id="modalCaption" style="color:#fff; text-align:center; margin-top:10px;"></div>
-</div>
 </body>
 </html>
