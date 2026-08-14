@@ -50,7 +50,7 @@
                 </div>
             </div>
         <!-- BẢNG ĐIỀU KHIỂN ZOOM & ĐỘ SÁNG -->
-<div class="camera-controls-panel" style="background: rgba(0,0,0,0.85); padding: 12px 18px; border-radius: 8px; margin: 10px auto 110px auto; max-width: 500px; display: flex; flex-direction: column; gap: 10px; border: 1px solid #555; position: relative; z-index: 10;">
+<div class="camera-controls-panel" style="background: rgba(0,0,0,0.85); padding: 8px 12px; border-radius: 8px; margin: 5px auto; max-width: 450px; position: relative; z-index: 10;">
 <!-- CHỌN THIẾT BỊ CAMERA -->
     <div style="margin-bottom: 10px;">
         <label for="cameraSelect" style="display: block; color: #ffeb3b; font-size: 14px; font-weight: bold; margin-bottom: 4px;">
@@ -74,6 +74,11 @@
 </div>
             <div class="camera-controls">
                 <div class="control-row">
+                    <!-- NÚT GỌI CAMERA GỐC ĐIỆN THOẠI -->
+    <input type="file" id="nativeCameraInput" accept="image/*" capture="environment" style="display: none;">
+    <button type="button" class="btn btn-success" onclick="document.getElementById('nativeCameraInput').click()" title="Chụp bằng camera gốc">
+        <i class="fa-solid fa-camera-retro"></i> Camera gốc
+    </button>
                     <button class="btn icon-btn" id="btnSwitchCamera" title="Đổi camera"><i class="fa-solid fa-rotate"></i></button>
                     <button class="btn btn-primary btn-large" id="btnCapturePhoto"><i class="fa-solid fa-camera"></i> CHỤP</button>
                     <button class="btn btn-danger btn-large" id="btnRecordVideo"><i class="fa-solid fa-video"></i> QUAY</button>

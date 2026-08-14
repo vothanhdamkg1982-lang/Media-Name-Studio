@@ -1230,3 +1230,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, 1200);
 });
+// Lắng nghe khi người dùng chụp xong từ camera gốc của điện thoại
+document.getElementById('nativeCameraInput')?.addEventListener('change', function(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const imageUrl = e.target.result;
+            
+            // Xử lý đưa hình ảnh này vào ứng dụng của bạn (ví dụ: gán vào biến lưu trữ hoặc hiển thị)
+            console.log("Đã chụp ảnh gốc thành công:", imageUrl);
+            
+            // Nếu bạn có hàm xử lý ảnh chụp, gọi ở đây. Ví dụ:
+            // App.handleCapturedImage(imageUrl);
+        };
+        reader.readAsDataURL(file);
+    }
+});
