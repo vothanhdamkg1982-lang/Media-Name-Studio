@@ -1,5 +1,5 @@
 /**
- * MEDIA NAME STUDIO - Core Application Engine (Stable Restore)
+ * MEDIA NAME STUDIO - Core Application Engine (Stable Restore + Direct Multi-Image Download)
  */
 
 const SUPABASE_URL = 'https://whuyytjksrpyojmukftp.supabase.co';
@@ -379,6 +379,9 @@ const App = {
     cameraFacingMode: 'environment',
     mediaRecorder: null, recordedChunks: [], isRecording: false, recordStartTime: 0, recordTimer: null,
     rawStream: null, animationFrameId: null, activeTab: 'tab-camera',
+    
+    // Gallery selection states
+    isSelectMode: false,
 
     async init() {
         try {
@@ -467,21 +470,22 @@ const App = {
             this.applyCameraFilters();
         });
 
+        // Gallery & Multi-select events
+        document.getElementById('btnToggleSelectMode')?.addEventListener('click', () => this.toggleSelectMode());
         document.getElementById('btnExportSelected')?.addEventListener('click', () => this.exportSelectedMedia());
         document.getElementById('btnDeleteSelected')?.addEventListener('click', () => this.deleteSelectedMedia());
+        document.getElementById('btnDownloadSelectedImages')?.addEventListener('click', () => this.downloadSelectedImages());
         document.getElementById('filterType')?.addEventListener('change', () => this.loadGallery());
 
-        document.getElementById('btnSelectAllMedia')?.addEventListener('click', (e) => {
-            const btn = e.currentTarget;
-            const isAll = btn.dataset.state === 'all';
-            document.querySelectorAll('.gallery-checkbox').forEach(cb => cb.checked = !isAll);
-            btn.dataset.state = isAll ? 'none' : 'all';
-            btn.innerHTML = isAll ? '<i class="fa-solid fa-check-double"></i> Chọn tất cả' : '<i class="fa-solid fa-xmark"></i> Bỏ chọn tất cả';
-            btn.classList.toggle('btn-warning', !isAll);
-            btn.classList.toggle('btn-secondary', isAll);
+        document.getElementById('btnSelectAllMedia')?.addEventListener('click', () => this.setAllCheckboxes(true));
+        document.getElementById('btnDeselectAllMedia')?.addEventListener('click', () => this.setAllCheckboxes(false));
+
+        document.getElementById('closeImageModal')?.addEventListener('click', () => {
+            document.getElementById('imageModal').classList.add('hidden');
+            // Fix: Reset mức zoom về mặc định khi đóng modal
+            if (typeof window.resetImageZoom === 'function') window.resetImageZoom();
         });
 
-        document.getElementById('closeImageModal')?.addEventListener('click', () => document.getElementById('imageModal').classList.add('hidden'));
         document.getElementById('closeVideoModal')?.addEventListener('click', () => {
             const m = document.getElementById('videoModal'); const v = document.getElementById('modalVideo');
             m.classList.add('hidden'); v.pause(); v.src = '';
@@ -571,7 +575,6 @@ const App = {
                     canvas.height = video.videoHeight;
                 }
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                // KHÔNG vẽ watermark vào preview liên tục
             }
             if (this.rawStream) this.animationFrameId = requestAnimationFrame(render);
         };
@@ -593,8 +596,6 @@ const App = {
 
         const btnElement = document.getElementById('btnCapturePhoto');
         if(btnElement) btnElement.disabled = true;
-
-        console.log('[CAPTURE] video:', video.videoWidth, video.videoHeight);
 
         const captureCanvas = document.createElement('canvas');
         captureCanvas.width = video.videoWidth;
@@ -619,7 +620,6 @@ const App = {
         ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
         ctx.restore();
 
-        // Chỉ áp dụng watermark 1 lần khi chụp thật
         WatermarkManager.drawToCanvas(captureCanvas, this.currentStudent.name, this.settings);
 
         const blob = await new Promise(resolve => captureCanvas.toBlob(resolve, 'image/jpeg', 0.92));
@@ -629,7 +629,6 @@ const App = {
             if(btnElement) btnElement.disabled = false;
             return;
         }
-        console.log('[CAPTURE] blob size:', blob.size);
 
         try {
             await MediaPipeline.saveMediaToApp(blob, 'photo', this.currentStudent.name);
@@ -702,14 +701,12 @@ const App = {
 
             const mimeType = Utils.getSupportedMimeType();
             if (!mimeType) { Utils.showToast("Trình duyệt không hỗ trợ quay video!"); return; }
-            console.log('[RECORD] mimeType:', mimeType);
 
             this.mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
             this.recordedChunks = [];
             this.mediaRecorder.ondataavailable = e => { if (e.data.size > 0) this.recordedChunks.push(e.data); };
             
             this.mediaRecorder.onstop = async () => {
-                console.log('[RECORD] chunks:', this.recordedChunks.length);
                 const blob = new Blob(this.recordedChunks, { type: mimeType });
                 try {
                     await MediaPipeline.saveMediaToApp(blob, 'video', this.currentStudent.name);
@@ -810,13 +807,69 @@ const App = {
         });
     },
 
+    // ==========================================
+    // GALLERY & MULTI-SELECT & DIRECT DOWNLOAD
+    // ==========================================
+    toggleSelectMode() {
+        this.isSelectMode = !this.isSelectMode;
+        const actionBar = document.getElementById('selectionActionBar');
+        const toggleBtn = document.getElementById('btnToggleSelectMode');
+        
+        if (this.isSelectMode) {
+            actionBar.classList.remove('hidden');
+            toggleBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Hủy chọn nhiều';
+            toggleBtn.classList.replace('btn-secondary', 'btn-danger');
+        } else {
+            actionBar.classList.add('hidden');
+            toggleBtn.innerHTML = '<i class="fa-solid fa-square-check"></i> Chọn nhiều';
+            toggleBtn.classList.replace('btn-danger', 'btn-secondary');
+            this.setAllCheckboxes(false);
+        }
+        this.loadGallery();
+    },
+
+    updateSelectedCount() {
+        const checkedBoxes = document.querySelectorAll('.gallery-checkbox:checked');
+        const count = checkedBoxes.length;
+        const countText = document.getElementById('selectedCountText');
+        if (countText) {
+            countText.textContent = `Đã chọn: ${count}`;
+        }
+    },
+
+    setAllCheckboxes(select) {
+        const filter = document.getElementById('filterType').value;
+        const checkboxes = document.querySelectorAll('.gallery-checkbox');
+        checkboxes.forEach(cb => {
+            if (filter === 'photo' && cb.dataset.type !== 'photo') return;
+            cb.checked = select;
+        });
+        this.updateSelectedCount();
+    },
+
+    getSelectedGalleryItems() {
+        const checkedBoxes = document.querySelectorAll('.gallery-checkbox:checked');
+        const items = [];
+        checkedBoxes.forEach(cb => {
+            if (cb._mediaObject) {
+                items.push(cb._mediaObject);
+            }
+        });
+        return items;
+    },
+
     async loadGallery() {
         const filter = document.getElementById('filterType').value;
         let list = await db.getAllMedia();
         if (filter !== 'all') list = list.filter(m => m.type === filter);
         const grid = document.getElementById('galleryGrid');
         grid.innerHTML = '';
-        if (list.length === 0) { grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #888; padding: 30px;">Chưa có file nào</p>'; return; }
+        
+        if (list.length === 0) { 
+            grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #888; padding: 30px;">Chưa có file nào</p>'; 
+            this.updateSelectedCount();
+            return; 
+        }
 
         list.forEach(media => {
             const item = document.createElement('div');
@@ -824,12 +877,29 @@ const App = {
             const url = URL.createObjectURL(media.blob);
             const syncIcon = media.sync_status === 'synced' ? '<span class="sync-badge synced"><i class="fa-solid fa-cloud-check"></i></span>' : '<span class="sync-badge pending"><i class="fa-solid fa-cloud-arrow-up"></i></span>';
             const mediaTag = media.type === 'photo' ? `<img src="${url}" alt="photo">` : `<video src="${url}" preload="metadata"></video>`;
-            item.innerHTML = `<input type="checkbox" class="gallery-checkbox" data-id="${media.id}"> ${syncIcon} ${mediaTag}
+            
+            const checkboxDisplay = this.isSelectMode ? '' : 'style="display: none;"';
+            
+            item.innerHTML = `<input type="checkbox" class="gallery-checkbox" data-id="${media.id}" data-type="${media.type}" ${checkboxDisplay}> ${syncIcon} ${mediaTag}
                               <div class="gallery-info"><strong>${media.studentName}</strong></div>`;
-            item.querySelector('img, video').addEventListener('click', () => this.viewMedia(url, media.type, media.fileName));
+            
+            const cb = item.querySelector('.gallery-checkbox');
+            cb._mediaObject = media;
+            cb.addEventListener('change', () => this.updateSelectedCount());
+
+            item.querySelector('img, video').addEventListener('click', () => {
+                if (this.isSelectMode) {
+                    cb.checked = !cb.checked;
+                    this.updateSelectedCount();
+                } else {
+                    this.viewMedia(url, media.type, media.fileName);
+                }
+            });
             grid.appendChild(item);
         });
+        this.updateSelectedCount();
     },
+
     viewMedia(url, type, fileName) {
         if (type === 'photo') {
             document.getElementById('modalImg').src = url; document.getElementById('modalCaption').textContent = fileName;
@@ -839,6 +909,63 @@ const App = {
             document.getElementById('videoModal').classList.remove('hidden'); v.play();
         }
     },
+
+    async downloadSelectedImages() {
+        const selectedImages = this.getSelectedGalleryItems().filter(item => item.type === 'photo');
+
+        if (!selectedImages.length) {
+            Utils.showToast('Vui lòng chọn ít nhất một ảnh!');
+            return;
+        }
+
+        let successCount = 0;
+        let errorCount = 0;
+        const total = selectedImages.length;
+
+        Utils.showToast(`Đang chuẩn bị tải ${total} ảnh...`);
+
+        for (let i = 0; i < total; i++) {
+            const item = selectedImages[i];
+            const blob = item.blob;
+
+            if (!blob) {
+                console.warn('Không tìm thấy Blob:', item);
+                errorCount++;
+                continue;
+            }
+
+            try {
+                const currentNum = i + 1;
+                Utils.showToast(`Đang tải ảnh... ${currentNum} / ${total}`);
+
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = item.fileName || `image_${Date.now()}.jpg`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+
+                setTimeout(() => {
+                    URL.revokeObjectURL(url);
+                }, 1000);
+
+                successCount++;
+                // Delay nhỏ tránh trình duyệt chặn tải hàng loạt
+                await new Promise(resolve => setTimeout(resolve, 350));
+            } catch (err) {
+                console.error('Lỗi khi tải ảnh:', item.fileName, err);
+                errorCount++;
+            }
+        }
+
+        if (errorCount === 0) {
+            Utils.showToast(`✅ Đã tải thành công ${successCount} ảnh.`);
+        } else {
+            Utils.showToast(`Đã tải thành công: ${successCount} | Lỗi: ${errorCount}`);
+        }
+    },
+
     async exportSelectedMedia() {
         const cbs = document.querySelectorAll('.gallery-checkbox:checked');
         if (cbs.length === 0) return Utils.showToast("Chọn ít nhất 1 file!");
@@ -852,6 +979,7 @@ const App = {
         saveAs(content, `Media_Studio_${Utils.formatDateForFile(Date.now())}.zip`);
         Utils.showToast("Đã xuất ZIP!");
     },
+
     async deleteSelectedMedia() {
         const cbs = document.querySelectorAll('.gallery-checkbox:checked');
         if (cbs.length === 0 || !confirm(`Xóa vĩnh viễn ${cbs.length} file?`)) return;
@@ -872,4 +1000,100 @@ const App = {
     }
 };
 
-window.addEventListener('DOMContentLoaded', () => { if (!window.appInitialized) { window.appInitialized = true; App.init(); } });
+// Added: Hỗ trợ chức năng Zoom ảnh trong Gallery
+function initImageZoom() {
+    const modalImg = document.getElementById('modalImg');
+    if (!modalImg) return;
+    
+    let currentZoom = 1;
+    let panX = 0;
+    let panY = 0;
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+
+    const updateTransform = () => {
+        modalImg.style.transform = `translate(${panX}px, ${panY}px) scale(${currentZoom})`;
+    };
+
+    // Được gọi khi đóng Modal (từ App.bindEvents)
+    window.resetImageZoom = () => {
+        currentZoom = 1;
+        panX = 0;
+        panY = 0;
+        updateTransform();
+    };
+
+    // Zoom bằng cuộn chuột (Desktop)
+    modalImg.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const zoomStep = 0.15;
+        if (e.deltaY < 0) {
+            currentZoom = Math.min(currentZoom + zoomStep, 4);
+        } else {
+            currentZoom = Math.max(currentZoom - zoomStep, 1);
+        }
+        if (currentZoom === 1) { panX = 0; panY = 0; }
+        updateTransform();
+    }, { passive: false });
+
+    // Kéo bằng chuột (Desktop)
+    modalImg.addEventListener('mousedown', (e) => {
+        if (currentZoom > 1) {
+            isDragging = true;
+            startX = e.clientX - panX;
+            startY = e.clientY - panY;
+        }
+    });
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        panX = e.clientX - startX;
+        panY = e.clientY - startY;
+        updateTransform();
+    });
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    // Cảm ứng 2 ngón (Pinch) và vuốt pan (Mobile)
+    let initialDistance = null;
+    let initialZoom = 1;
+
+    modalImg.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            initialDistance = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+            initialZoom = currentZoom;
+        } else if (e.touches.length === 1 && currentZoom > 1) {
+            isDragging = true;
+            startX = e.touches[0].clientX - panX;
+            startY = e.touches[0].clientY - panY;
+        }
+    }, { passive: false });
+
+    modalImg.addEventListener('touchmove', (e) => {
+        if (currentZoom > 1 || e.touches.length === 2) e.preventDefault(); // Tránh cuộn trang khi đang thao tác
+        
+        if (e.touches.length === 2 && initialDistance) {
+            const currentDistance = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+            const scale = currentDistance / initialDistance;
+            currentZoom = Math.max(1, Math.min(initialZoom * scale, 4));
+            if (currentZoom === 1) { panX = 0; panY = 0; }
+            updateTransform();
+        } else if (e.touches.length === 1 && isDragging && currentZoom > 1) {
+            panX = e.touches[0].clientX - startX;
+            panY = e.touches[0].clientY - startY;
+            updateTransform();
+        }
+    }, { passive: false });
+
+    modalImg.addEventListener('touchend', () => {
+        isDragging = false;
+        initialDistance = null;
+    });
+}
+
+window.addEventListener('DOMContentLoaded', () => { 
+    if (!window.appInitialized) { 
+        window.appInitialized = true; 
+        App.init(); 
+        initImageZoom(); // Kích hoạt chức năng Zoom ngay khi DOM Load
+    } 
+});
