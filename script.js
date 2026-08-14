@@ -555,7 +555,7 @@ const App = {
                     canvas.height = video.videoHeight;
                 }
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                // this.drawWatermark(ctx, canvas);
+                this.drawWatermark(ctx, canvas);
             }
             if (this.rawStream) {
                 this.animationFrameId = requestAnimationFrame(render);
@@ -633,11 +633,15 @@ const App = {
             this.switchTab('tab-list');
             return;
         }
+const canvas = document.getElementById('outputCanvas');
+    
+    // --- GỌI CỖ MÁY IN WATERMARK LÊN ẢNH ---
+    WatermarkManager.drawTextToCanvas(canvas, this.currentStudent.name);
+    // ----------------------------------------
 
-        const canvas = document.getElementById('outputCanvas');
-        canvas.toBlob(async (blob) => {
-            if (!blob) return;
-            const timestamp = Date.now();
+    canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        const timestamp = Date.now();
             const cleanName = Utils.removeVietnameseTones(this.currentStudent.name);
             const fileName = `${cleanName}_${Utils.formatDateForFile(timestamp)}.jpg`;
 
@@ -1004,4 +1008,174 @@ window.addEventListener('DOMContentLoaded', () => {
         window.appInitialized = true;
         App.init();
     }
+});
+// ==========================================
+// BƯỚC 3: BỘ CÔNG CỤ IN WATERMARK CHUẨN
+// ==========================================
+const WatermarkManager = {
+    drawTextToCanvas(canvas, studentName) {
+        const isWatermarkEnabled = localStorage.getItem('drawWatermark') === 'true';
+        if (!isWatermarkEnabled) return; // Nếu không tích thì bỏ qua
+
+        const ctx = canvas.getContext('2d');
+        
+        // Lấy ngày tháng năm hiện tại
+        const dateObj = new Date();
+        const dateStr = `${dateObj.getDate().toString().padStart(2, '0')}/${(dateObj.getMonth() + 1).toString().padStart(2, '0')}/${dateObj.getFullYear()}`;
+        
+        // Nội dung in: Tên - Ngày
+        const watermarkText = `${studentName} - ${dateStr}`;
+
+        // Cài đặt Font chữ và màu sắc (Màu vàng cam nổi bật)
+ctx.font = 'bold 20px Arial'; 
+ctx.fillStyle = 'rgb(255, 36, 7);'; // Chữ màu vàng cam (Orange)
+ctx.textAlign = 'right'; // Căn lề phải
+ctx.textBaseline = 'bottom'; // Căn lề dưới
+
+        // Đổ bóng đen để chữ nổi bật trên nền sáng
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+
+        // Tọa độ in (Cách góc phải dưới 15px)
+        const x = canvas.width - 15;
+        const y = canvas.height - 15;
+
+        ctx.fillText(watermarkText, x, y);
+
+        // Trả lại mặc định
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+    }
+};
+// ==========================================
+// BƯỚC 2: XỬ LÝ LƯU CÀI ĐẶT WATERMARK GÓC ẢNH
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    const watermarkCheckbox = document.getElementById('settingWatermark');
+    
+    if (watermarkCheckbox) {
+        // 1. Tải trạng thái đã lưu khi mở web (mặc định là false)
+        const isWatermarkEnabled = localStorage.getItem('drawWatermark') === 'true';
+        watermarkCheckbox.checked = isWatermarkEnabled;
+
+        // 2. Lưu lại cài đặt ngay khi bạn tích hoặc bỏ tích
+        watermarkCheckbox.addEventListener('change', (e) => {
+            localStorage.setItem('drawWatermark', e.target.checked);
+            console.log("Đã cập nhật trạng thái in watermark:", e.target.checked);
+        });
+    }
+});
+// ==========================================
+// TÍNH NĂNG ZOOM, ĐỘ SÁNG & TỰ ĐỘNG ẨN HIỆN THEO TAB
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    const oldStyle = document.getElementById('custom-camera-style');
+    if (oldStyle) oldStyle.remove();
+
+    const customStyle = document.createElement('style');
+    customStyle.id = 'custom-camera-style';
+    customStyle.innerHTML = `
+        /* Phóng to khung màn hình camera to rõ */
+        video, #outputCanvas {
+            width: 100% !important;
+            max-width: 820px !important;
+            height: auto !important;
+            max-height: 62vh !important;
+            object-fit: cover;
+            border-radius: 8px;
+            margin: 0 auto;
+            display: block;
+        }
+
+        /* Gom bảng điều khiển và các nút bấm lại gần nhau gọn gàng */
+        .camera-controls-panel {
+            margin: 8px auto !important;
+            max-width: 480px !important;
+        }
+
+        /* Đảm bảo tab camera có không gian cuộn mượt mà */
+        #tab-camera {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-bottom: 80px;
+        }
+    `;
+    document.head.appendChild(customStyle);
+
+    // Tự động ẩn bảng điều khiển zoom/độ sáng khi chuyển sang các tab khác (Thư viện, Cài đặt)
+    const updatePanelVisibility = () => {
+        const cameraPanel = document.querySelector('.camera-controls-panel');
+        const cameraTab = document.getElementById('tab-camera');
+        if (cameraPanel && cameraTab) {
+            const isHidden = window.getComputedStyle(cameraTab).display === 'none' || cameraTab.classList.contains('d-none');
+            cameraPanel.style.display = isHidden ? 'none' : 'flex';
+        }
+    };
+
+    // Lắng nghe sự kiện click chuyển tab trên toàn trang
+    document.addEventListener('click', () => {
+        setTimeout(updatePanelVisibility, 100);
+    });
+    
+    // Kiểm tra ngay khi tải trang xong
+    setTimeout(updatePanelVisibility, 300);
+
+    // Logic xử lý Zoom & Độ sáng
+    setTimeout(() => {
+        const zoomRange = document.getElementById('zoomRange');
+        const brightnessRange = document.getElementById('brightnessRange');
+        const resetBtn = document.getElementById('btnResetCamera');
+
+        const getVideoElement = () => document.querySelector('video');
+
+        const applyCameraTransform = (zoomVal, brightnessVal) => {
+            const videoElement = getVideoElement();
+            if (videoElement) {
+                videoElement.style.transform = `scale(${zoomVal})`;
+                videoElement.style.transformOrigin = 'center center';
+                
+                if (brightnessVal === 1) {
+                    videoElement.style.filter = 'none'; 
+                } else {
+                    videoElement.style.filter = `brightness(${brightnessVal})`; 
+                }
+            }
+        };
+
+        if (zoomRange) {
+            zoomRange.addEventListener('input', (e) => {
+                const zoomVal = parseFloat(e.target.value);
+                const brightVal = brightnessRange ? parseFloat(brightnessRange.value) : 1;
+                applyCameraTransform(zoomVal, brightVal);
+            });
+        }
+
+        if (brightnessRange) {
+            brightnessRange.addEventListener('input', (e) => {
+                const brightVal = parseFloat(e.target.value);
+                const zoomVal = zoomRange ? parseFloat(zoomRange.value) : 1;
+                applyCameraTransform(zoomVal, brightVal);
+            });
+        }
+
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                if (zoomRange) zoomRange.value = 1;
+                if (brightnessRange) brightnessRange.value = 1;
+                
+                const videoElement = getVideoElement();
+                if (videoElement) {
+                    videoElement.style.transform = 'scale(1)';
+                    videoElement.style.filter = 'none';
+                }
+
+                if (typeof Utils !== 'undefined' && Utils.showToast) {
+                    Utils.showToast("Đã khôi phục webcam về mặc định!");
+                }
+            });
+        }
+    }, 1200);
 });

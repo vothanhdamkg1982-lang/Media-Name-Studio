@@ -49,7 +49,20 @@
                     <span class="dot"></span> REC <span id="recordingTime">00:00</span>
                 </div>
             </div>
-            
+        <!-- BẢNG ĐIỀU KHIỂN ZOOM & ĐỘ SÁNG -->
+<div class="camera-controls-panel" style="background: rgba(0,0,0,0.85); padding: 12px 18px; border-radius: 8px; margin: 10px auto 110px auto; max-width: 500px; display: flex; flex-direction: column; gap: 10px; border: 1px solid #555; position: relative; z-index: 10;">
+    <div style="display: flex; align-items: center; justify-content: space-between; color: #ffeb3b; font-size: 14px; font-weight: bold;">
+        <span><i class="fa-solid fa-magnifying-glass"></i> Phóng to (Zoom):</span>
+        <input type="range" id="zoomRange" min="1" max="3" step="0.1" value="1" style="width: 58%; cursor: pointer;">
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; color: #ffeb3b; font-size: 14px; font-weight: bold;">
+        <span><i class="fa-solid fa-sun"></i> Độ sáng:</span>
+        <input type="range" id="brightnessRange" min="0.5" max="2.8" step="0.1" value="1" style="width: 58%; cursor: pointer;">
+    </div>
+    <button id="btnResetCamera" class="btn btn-secondary w-100" style="background: #444; color: #fff; padding: 6px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+        <i class="fa-solid fa-rotate-right"></i> Đặt lại mặc định (Reset)
+    </button>
+</div>
             <div class="camera-controls">
                 <div class="control-row">
                     <button class="btn icon-btn" id="btnSwitchCamera" title="Đổi camera"><i class="fa-solid fa-rotate"></i></button>
@@ -148,10 +161,16 @@
                 <div class="form-group">
                     <label for="setBgColor">Màu nền hộp chữ (RGBA):</label>
                     <input type="text" id="setBgColor" class="form-control" value="rgba(0,0,0,0.5)">
+                    </div>
+                    <div class="form-group checkbox-group" style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #555;">
+                    <label style="cursor: pointer; color: #ffeb3b; font-weight: bold;">
+                        <input type="checkbox" id="settingWatermark"> 
+                        In tên và ngày chụp vào góc phải dưới ảnh
+                    </label>
                 </div>
-                <button id="btnSaveSettings" class="btn btn-primary w-100 btn-large">
-                    <i class="fa-solid fa-floppy-disk"></i> LƯU CẤU HÌNH
-                </button>
+                <button id="btnSaveSettings" class="btn btn-primary w-100 btn-large" style="margin-top: 15px; margin-bottom: 80px;">
+    <i class="fa-solid fa-floppy-disk"></i> LƯU CẤU HÌNH
+</button>
             </div>
         </section>
     </main>
