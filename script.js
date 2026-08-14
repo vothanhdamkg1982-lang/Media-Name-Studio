@@ -1247,3 +1247,72 @@ document.getElementById('nativeCameraInput')?.addEventListener('change', functio
         reader.readAsDataURL(file);
     }
 });
+// ==========================================
+// TÍNH NĂNG CHỌN / BỎ CHỌN TẤT CẢ ẢNH CHUẨN XÁC
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    const btnSelectAll = document.getElementById('btnSelectAllMedia');
+    
+    if (btnSelectAll) {
+        let isAllSelected = false;
+
+        btnSelectAll.addEventListener('click', () => {
+            isAllSelected = !isAllSelected;
+            
+            // Tìm chính xác tất cả các checkbox bên trong lưới hiển thị ảnh (galleryGrid)
+            const checkboxes = document.querySelectorAll('#galleryGrid input[type="checkbox"]');
+            
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = isAllSelected;
+                // Kích hoạt sự kiện để phần mềm nhận diện trạng thái thay đổi
+                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                checkbox.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+
+            // Cập nhật giao diện nút bấm
+            if (isAllSelected) {
+                btnSelectAll.innerHTML = '<i class="fa-solid fa-xmark"></i> Bỏ chọn tất cả';
+                btnSelectAll.classList.replace('btn-secondary', 'btn-warning');
+            } else {
+                btnSelectAll.innerHTML = '<i class="fa-solid fa-check-double"></i> Chọn tất cả';
+                btnSelectAll.classList.replace('btn-warning', 'btn-secondary');
+            }
+        });
+    }
+});
+// ==========================================
+// XỬ LÝ ẢNH CHỤP TỪ CAMERA GỐC TRÊN ĐIỆN THOẠI
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    const nativeInput = document.getElementById('nativeCameraInput');
+    
+    if (nativeInput) {
+        nativeInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        // Tạo canvas để vẽ ảnh kèm watermark (nếu ứng dụng có sẵn hàm xử lý)
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        
+                        // Gọi hàm lưu ảnh hoặc đưa vào danh sách hiển thị của ứng dụng bạn
+                        // (Thay thế hàm handleCapturedImage bằng tên hàm xử lý ảnh gốc trong code của bạn nếu có)
+                        if (typeof window.addPhotoToGallery === 'function') {
+                            window.addPhotoToGallery(canvas.toDataURL('image/jpeg'));
+                        } else {
+                            console.log("Đã nhận ảnh từ camera gốc:", canvas.toDataURL('image/jpeg'));
+                        }
+                    }
+                    img.src = event.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+});

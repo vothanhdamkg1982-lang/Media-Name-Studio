@@ -390,3 +390,20 @@ canvas#outputCanvas {
     font-weight: bold;
     cursor: pointer;
 }
+/* Đẩy giao diện trên điện thoại không bị thanh công cụ trình duyệt che */
+body, .app-container, .tab-content {
+    padding-bottom: 90px !important;
+}
+
+/* Đảm bảo thanh menu tab cố định nổi hẳn lên trên thanh công cụ của điện thoại */
+.nav-tabs, .bottom-nav, .tab-bar {
+    position: fixed !important;
+    bottom: 20px !important;
+    left: 10px !important;
+    right: 10px !important;
+    background: rgba(20, 20, 20, 0.95) !important;
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    z-index: 9999;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
