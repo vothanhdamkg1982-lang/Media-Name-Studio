@@ -1,11 +1,7 @@
 /**
- * MEDIA NAME STUDIO - Core Application Engine (Rewrite)
- * Unified & Mobile First
+ * MEDIA NAME STUDIO - Core Application Engine (Stable Restore)
  */
 
-// ==========================================
-// 1. SUPABASE CONFIGURATION
-// ==========================================
 const SUPABASE_URL = 'https://whuyytjksrpyojmukftp.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_gpW8TcOIz4ocrrMIWUx3Qg_sZaeZqQ0';
 
@@ -16,9 +12,6 @@ if (window.supabase) {
     console.error("Supabase SDK chưa được tải thành công!");
 }
 
-// ==========================================
-// 2. UTILITIES
-// ==========================================
 const Utils = {
     removeVietnameseTones(str) {
         if (!str) return '';
@@ -45,10 +38,6 @@ const Utils = {
         const pad = n => String(n).padStart(2, '0');
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
     },
-    formatDateDisplay(dateObj) {
-        const pad = n => String(n).padStart(2, '0');
-        return `${pad(dateObj.getDate())}/${pad(dateObj.getMonth() + 1)}/${dateObj.getFullYear()}`;
-    },
     showToast(message, duration = 3000) {
         const toast = document.getElementById('toast');
         if (!toast) return;
@@ -66,9 +55,6 @@ const Utils = {
     }
 };
 
-// ==========================================
-// 3. DATABASE CONTROLLER (INDEXEDDB)
-// ==========================================
 class AppDB {
     constructor() {
         this.dbName = 'MediaNameStudioDB';
@@ -152,9 +138,6 @@ class AppDB {
 }
 const db = new AppDB();
 
-// ==========================================
-// 4. AUTH & CLOUD SYNC MANAGER
-// ==========================================
 const Auth = {
     currentUser: null,
     async init() {
@@ -259,64 +242,6 @@ const SyncManager = {
     }
 };
 
-// ==========================================
-// 5. UNIFIED MEDIA PIPELINE & WATERMARK
-// ==========================================
-const WatermarkManager = {
-    drawToCanvas(canvas, studentName, settings) {
-        if (!settings.enabled) return;
-        const ctx = canvas.getContext('2d');
-        const lines = [];
-
-        // Legacy / Custom layout or standard Bottom-Right
-        if (settings.position === 'bottom-right') {
-            const dateStr = Utils.formatDateDisplay(new Date());
-            lines.push(`${studentName} - ${dateStr}`);
-            ctx.font = 'bold 20px Arial'; 
-            ctx.fillStyle = 'rgb(255, 36, 7)';
-            ctx.textAlign = 'right';
-            ctx.textBaseline = 'bottom';
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-            ctx.shadowBlur = 4;
-            ctx.shadowOffsetX = 2;
-            ctx.shadowOffsetY = 2;
-            ctx.fillText(lines[0], canvas.width - 15, canvas.height - 15);
-            ctx.shadowColor = 'transparent';
-        } else {
-            if (settings.showUnit && settings.unitName) lines.push(settings.unitName.toUpperCase());
-            if (studentName) lines.push(`HỌ TÊN: ${studentName.toUpperCase()}`);
-            if (settings.showDate) lines.push(Utils.formatDateDisplay(new Date()));
-            if (lines.length === 0) return;
-
-            const fontSize = parseInt(settings.fontSize) || 32;
-            ctx.font = `bold ${fontSize}px Arial, sans-serif`;
-            const lineHeight = fontSize * 1.35;
-            let maxWidth = 0;
-            lines.forEach(l => { const w = ctx.measureText(l).width; if (w > maxWidth) maxWidth = w; });
-
-            const pad = 14;
-            const bWidth = maxWidth + (pad * 2);
-            const bHeight = (lines.length * lineHeight) + (pad * 0.5);
-            let x = 20, y = 20;
-
-            if (settings.align === 'center') x = (canvas.width - bWidth) / 2;
-            else if (settings.align === 'right') x = canvas.width - bWidth - 20;
-
-            if (settings.position === 'center') y = (canvas.height - bHeight) / 2;
-            else if (settings.position === 'bottom') y = canvas.height - bHeight - 20;
-
-            if (settings.bgColor !== 'transparent') {
-                ctx.fillStyle = settings.bgColor || 'rgba(0,0,0,0.5)';
-                ctx.fillRect(x, y, bWidth, bHeight);
-            }
-            ctx.fillStyle = settings.color || '#ffffff';
-            ctx.textBaseline = 'top';
-            ctx.textAlign = 'left';
-            lines.forEach((l, i) => ctx.fillText(l, x + pad, y + (pad / 2) + (i * lineHeight)));
-        }
-    }
-};
-
 const MediaPipeline = {
     async saveMediaToApp(blob, type, studentName) {
         const timestamp = Date.now();
@@ -325,26 +250,130 @@ const MediaPipeline = {
         const fileName = `${cleanName}_${Utils.formatDateForFile(timestamp)}.${ext}`;
 
         const mediaData = {
-            id: timestamp.toString(), type: type, blob: blob,
-            studentName: studentName, fileName: fileName, timestamp: timestamp, sync_status: 'pending'
+            id: timestamp.toString(),
+            type,
+            blob,
+            studentName,
+            fileName,
+            timestamp,
+            sync_status: 'pending'
         };
 
-        await db.saveMedia(mediaData);
-        Utils.showToast(`Đã lưu ${type === 'photo' ? 'ảnh' : 'video'}: ${studentName}`);
-        
-        if (App.activeTab === 'tab-gallery') App.loadGallery();
-        SyncManager.uploadSingleMedia(mediaData);
+        try {
+            await db.saveMedia(mediaData);
+            console.log('[MEDIA] saving:', mediaData);
+            
+            if (App.activeTab === 'tab-gallery') {
+                await App.loadGallery();
+            }
+            if (Auth.currentUser) {
+                await SyncManager.uploadSingleMedia(mediaData);
+            }
+            return mediaData;
+        } catch (error) {
+            console.error("SAVE MEDIA ERROR:", error);
+            Utils.showToast("Lỗi hệ thống khi lưu file!");
+            throw error;
+        }
     }
 };
 
-// ==========================================
-// 6. MAIN APPLICATION CONTROLLER
-// ==========================================
+const WatermarkManager = {
+    drawToCanvas(canvas, studentName, settings) {
+        if (!settings.enabled) return;
+        console.log('[WATERMARK] settings:', settings);
+
+        const ctx = canvas.getContext('2d');
+        const lines = [];
+
+        if (settings.showUnit && settings.unitName) {
+            lines.push(settings.unitName.toUpperCase());
+        }
+        
+        if (studentName) {
+            lines.push(`HỌ TÊN: ${studentName.toUpperCase()}`);
+        }
+        
+        if (settings.showDate) {
+            const now = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            const dateStr = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+            const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+            lines.push(`${dateStr} ${timeStr}`);
+        }
+
+        if (lines.length === 0) return;
+
+        const fontSize = parseInt(settings.fontSize) || 12;
+        ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+
+        const lineHeight = fontSize * 1.4;
+        let maxWidth = 0;
+        lines.forEach(l => { 
+            const w = ctx.measureText(l).width; 
+            if (w > maxWidth) maxWidth = w; 
+        });
+
+        const padding = 10;
+        const bWidth = maxWidth + (padding * 2);
+        const bHeight = (lines.length * lineHeight) + padding;
+
+        let boxX = padding;
+        let boxY = padding;
+
+        if (settings.position === 'bottom-right') {
+            boxX = canvas.width - bWidth - padding;
+            boxY = canvas.height - bHeight - padding;
+        } else if (settings.position === 'bottom') {
+            boxX = (canvas.width - bWidth) / 2;
+            boxY = canvas.height - bHeight - padding;
+        } else if (settings.position === 'center') {
+            boxX = (canvas.width - bWidth) / 2;
+            boxY = (canvas.height - bHeight) / 2;
+        } else if (settings.position === 'top') {
+            boxX = (canvas.width - bWidth) / 2;
+            boxY = padding;
+        }
+
+        if (settings.bgColor && settings.bgColor.trim() !== 'transparent') {
+            ctx.fillStyle = settings.bgColor;
+            ctx.fillRect(boxX, boxY, bWidth, bHeight);
+        }
+
+        ctx.fillStyle = settings.color || '#ff2407';
+        ctx.textBaseline = 'top';
+
+        if (settings.bgColor === 'transparent' || !settings.bgColor) {
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+            ctx.shadowBlur = 4;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+        }
+
+        lines.forEach((line, i) => {
+            let textX = boxX + padding; 
+            ctx.textAlign = 'left';
+
+            if (settings.align === 'center') {
+                textX = boxX + (bWidth / 2);
+                ctx.textAlign = 'center';
+            } else if (settings.align === 'right') {
+                textX = boxX + bWidth - padding;
+                ctx.textAlign = 'right';
+            }
+
+            ctx.fillText(line, textX, boxY + (padding / 2) + (i * lineHeight));
+        });
+
+        ctx.shadowColor = 'transparent';
+    }
+};
+
 const App = {
     settings: {
         enabled: true,
-        unitName: 'TRƯỜNG TIỂU HỌC TRẦN QUỐC TOẢN', showUnit: true, showDate: true,
-        position: 'bottom-right', align: 'center', fontSize: 20, color: '#ff2407', bgColor: 'transparent'
+        unitName: 'TRƯỜNG TH.TQT', showUnit: true, showDate: true,
+        position: 'bottom-right', align: 'right', fontSize: 12, color: '#ff2407', bgColor: 'transparent'
     },
     currentStudent: null,
     cameraFacingMode: 'environment',
@@ -361,7 +390,6 @@ const App = {
             await this.loadStudentList();
             await this.loadGallery();
             
-            // Khôi phục camera khi app active lại
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'visible' && this.activeTab === 'tab-camera') {
                     this.startCamera();
@@ -384,7 +412,7 @@ const App = {
         this.settings.showDate = document.getElementById('setShowDate').checked;
         this.settings.position = document.getElementById('setPosition').value;
         this.settings.align = document.getElementById('setAlign').value;
-        this.settings.fontSize = parseInt(document.getElementById('setFontSize').value) || 20;
+        this.settings.fontSize = parseInt(document.getElementById('setFontSize').value) || 12;
         this.settings.color = document.getElementById('setColor').value;
         this.settings.bgColor = document.getElementById('setBgColor').value;
         await db.setSetting('appSettings', this.settings);
@@ -425,14 +453,12 @@ const App = {
         document.getElementById('manualName')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addManualStudent(); });
 
         document.getElementById('btnSwitchCamera')?.addEventListener('click', () => this.switchCamera());
-        document.getElementById('btnCapturePhoto')?.addEventListener('click', (e) => this.takePhoto(e.currentTarget));
+        document.getElementById('btnCapturePhoto')?.addEventListener('click', () => this.takePhoto());
         document.getElementById('btnRecordVideo')?.addEventListener('click', () => this.toggleRecordVideo());
         
-        // Sự kiện duy nhất và bắt buộc cho Camera Gốc
         document.getElementById('btnNativeCamera')?.addEventListener('click', () => document.getElementById('nativeCameraInput').click());
         document.getElementById('nativeCameraInput')?.addEventListener('change', (e) => this.handleNativeCameraFile(e));
         
-        // Zoom & Brightness
         document.getElementById('zoomRange')?.addEventListener('input', () => this.applyCameraFilters());
         document.getElementById('brightnessRange')?.addEventListener('input', () => this.applyCameraFilters());
         document.getElementById('btnResetCamera')?.addEventListener('click', () => {
@@ -445,7 +471,6 @@ const App = {
         document.getElementById('btnDeleteSelected')?.addEventListener('click', () => this.deleteSelectedMedia());
         document.getElementById('filterType')?.addEventListener('change', () => this.loadGallery());
 
-        // Select All Media fix
         document.getElementById('btnSelectAllMedia')?.addEventListener('click', (e) => {
             const btn = e.currentTarget;
             const isAll = btn.dataset.state === 'all';
@@ -504,14 +529,15 @@ const App = {
                 audio: true
             };
             this.rawStream = await navigator.mediaDevices.getUserMedia(constraints);
+            console.log('[CAMERA] stream active:', this.rawStream);
             video.srcObject = this.rawStream;
             video.onloadedmetadata = () => { video.play(); this.startCanvasLoop(); };
             
             const selector = document.getElementById('cameraSelect');
             if (selector && selector.options.length <= 1) this.initCameraSelector();
         } catch (err) {
-            Utils.showToast(`Lỗi mở Camera: ${err.name}. Hãy dùng Camera Gốc.`);
-            console.warn(err);
+            Utils.showToast(`Lỗi mở Camera. Hãy dùng Camera Gốc.`);
+            console.error(err);
         }
     },
     stopCamera() {
@@ -541,54 +567,83 @@ const App = {
         const render = () => {
             if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
                 if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-                    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+                    canvas.width = video.videoWidth; 
+                    canvas.height = video.videoHeight;
                 }
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                WatermarkManager.drawToCanvas(canvas, this.currentStudent?.name || '', this.settings);
+                // KHÔNG vẽ watermark vào preview liên tục
             }
             if (this.rawStream) this.animationFrameId = requestAnimationFrame(render);
         };
         render();
     },
 
-    async takePhoto(btnElement) {
-        if (!this.currentStudent) { Utils.showToast("Vui lòng chọn học sinh!"); this.switchTab('tab-list'); return; }
-        const canvas = document.getElementById('outputCanvas');
-        if (!canvas || canvas.width === 0) { Utils.showToast("Camera chưa sẵn sàng!"); return; }
-
-        btnElement.disabled = true;
-        canvas.style.opacity = '0.2';
-        setTimeout(() => canvas.style.opacity = '1', 150);
-
-        // Chụp canvas hiện tại (đã vẽ ảnh và watermark)
-        const zoom = parseFloat(document.getElementById('zoomRange')?.value) || 1;
-        const bright = parseFloat(document.getElementById('brightnessRange')?.value) || 1;
-        
-        const captureCanvas = document.createElement('canvas');
-        captureCanvas.width = canvas.width; captureCanvas.height = canvas.height;
-        const ctx = captureCanvas.getContext('2d');
-        if (bright !== 1) ctx.filter = `brightness(${bright})`;
-        if (zoom !== 1) {
-            ctx.translate(canvas.width/2, canvas.height/2);
-            ctx.scale(zoom, zoom);
-            ctx.translate(-canvas.width/2, -canvas.height/2);
+    async takePhoto() {
+        if (!this.currentStudent) {
+            Utils.showToast("Vui lòng chọn học sinh trước khi chụp!");
+            this.switchTab('tab-list');
+            return;
         }
-        ctx.drawImage(document.getElementById('rawVideo'), 0, 0);
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.filter = 'none';
+
+        const video = document.getElementById('rawVideo');
+        if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) {
+            Utils.showToast("Camera chưa sẵn sàng!");
+            return;
+        }
+
+        const btnElement = document.getElementById('btnCapturePhoto');
+        if(btnElement) btnElement.disabled = true;
+
+        console.log('[CAPTURE] video:', video.videoWidth, video.videoHeight);
+
+        const captureCanvas = document.createElement('canvas');
+        captureCanvas.width = video.videoWidth;
+        captureCanvas.height = video.videoHeight;
+        const ctx = captureCanvas.getContext('2d');
+
+        const brightness = parseFloat(document.getElementById('brightnessRange')?.value) || 1;
+        const zoom = parseFloat(document.getElementById('zoomRange')?.value) || 1;
+
+        ctx.save();
+        if (brightness !== 1) {
+            ctx.filter = `brightness(${brightness})`;
+        }
+        if (zoom !== 1) {
+            const cx = captureCanvas.width / 2;
+            const cy = captureCanvas.height / 2;
+            ctx.translate(cx, cy);
+            ctx.scale(zoom, zoom);
+            ctx.translate(-cx, -cy);
+        }
         
+        ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+        ctx.restore();
+
+        // Chỉ áp dụng watermark 1 lần khi chụp thật
         WatermarkManager.drawToCanvas(captureCanvas, this.currentStudent.name, this.settings);
 
-        captureCanvas.toBlob(async (blob) => {
-            if (blob) await MediaPipeline.saveMediaToApp(blob, 'photo', this.currentStudent.name);
-            btnElement.disabled = false;
-        }, 'image/jpeg', 0.92);
+        const blob = await new Promise(resolve => captureCanvas.toBlob(resolve, 'image/jpeg', 0.92));
+        
+        if (!blob) {
+            Utils.showToast("Không tạo được file ảnh!");
+            if(btnElement) btnElement.disabled = false;
+            return;
+        }
+        console.log('[CAPTURE] blob size:', blob.size);
+
+        try {
+            await MediaPipeline.saveMediaToApp(blob, 'photo', this.currentStudent.name);
+            Utils.showToast(`Đã lưu ảnh: ${this.currentStudent.name}`);
+        } catch (error) {
+            console.error('[CAPTURE ERROR]', error);
+        } finally {
+            if(btnElement) btnElement.disabled = false;
+        }
     },
 
-    // Hàm chuẩn hoá dành riêng cho xử lý Camera Gốc
     async handleNativeCameraFile(e) {
         const file = e.target.files[0];
-        e.target.value = ''; // Reset input để có thể chụp tiếp ảnh sau
+        e.target.value = '';
         if (!file) return;
 
         if (!file.type.startsWith('image/')) {
@@ -612,39 +667,15 @@ const App = {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0);
                 
-                // Áp dụng Watermark chung 1 pipeline duy nhất giống với Camera Web
                 WatermarkManager.drawToCanvas(canvas, this.currentStudent.name, this.settings);
                 
                 canvas.toBlob(async (blob) => {
                     if (!blob) return;
-
-                    const timestamp = Date.now();
-                    const cleanName = Utils.removeVietnameseTones(this.currentStudent.name);
-                    const fileName = `${cleanName}_${Utils.formatDateForFile(timestamp)}.jpg`;
-
-                    const mediaData = {
-                        id: timestamp.toString(),
-                        type: 'photo',
-                        blob: blob,
-                        studentName: this.currentStudent.name,
-                        fileName: fileName,
-                        timestamp: timestamp,
-                        sync_status: 'pending'
-                    };
-
-                    // Lưu trực tiếp IndexedDB
-                    await db.saveMedia(mediaData);
-                    
-                    // Reload lập tức Gallery mà không đợi f5
-                    if (this.activeTab === 'tab-gallery') {
-                        await this.loadGallery();
-                    } else {
-                        Utils.showToast(`Đã lưu ảnh: ${this.currentStudent.name}`);
-                    }
-
-                    // Đồng bộ Supabase nếu user đã Auth
-                    if (Auth.currentUser) {
-                        await SyncManager.uploadSingleMedia(mediaData);
+                    try {
+                        await MediaPipeline.saveMediaToApp(blob, 'photo', this.currentStudent.name);
+                        Utils.showToast(`Đã lưu ảnh từ Camera gốc: ${this.currentStudent.name}`);
+                    } catch(err) {
+                        console.error('[MEDIA SAVE ERROR]', err);
                     }
                 }, 'image/jpeg', 0.92);
             };
@@ -660,30 +691,41 @@ const App = {
         this.isRecording ? this.stopRecording() : this.startRecording();
     },
     startRecording() {
+        if (!this.rawStream) { Utils.showToast("Camera chưa sẵn sàng!"); return; }
         const canvas = document.getElementById('outputCanvas');
-        if(!canvas || canvas.width === 0) return;
+        if (!canvas || canvas.width === 0) { Utils.showToast("Khung camera chưa sẵn sàng!"); return; }
+        
         try {
             const canvasStream = canvas.captureStream(30);
-            const audioTracks = this.rawStream ? this.rawStream.getAudioTracks() : [];
-            const combinedStream = new MediaStream([...canvasStream.getTracks(), ...audioTracks]);
+            const audioTracks = this.rawStream.getAudioTracks();
+            const combinedStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
 
             const mimeType = Utils.getSupportedMimeType();
             if (!mimeType) { Utils.showToast("Trình duyệt không hỗ trợ quay video!"); return; }
+            console.log('[RECORD] mimeType:', mimeType);
 
             this.mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
             this.recordedChunks = [];
             this.mediaRecorder.ondataavailable = e => { if (e.data.size > 0) this.recordedChunks.push(e.data); };
+            
             this.mediaRecorder.onstop = async () => {
+                console.log('[RECORD] chunks:', this.recordedChunks.length);
                 const blob = new Blob(this.recordedChunks, { type: mimeType });
-                await MediaPipeline.saveMediaToApp(blob, 'video', this.currentStudent.name);
+                try {
+                    await MediaPipeline.saveMediaToApp(blob, 'video', this.currentStudent.name);
+                } catch(err) {
+                    console.error('[RECORD ERROR]', err);
+                }
             };
 
             this.mediaRecorder.start();
             this.isRecording = true;
 
             const btn = document.getElementById('btnRecordVideo');
-            btn.innerHTML = '<i class="fa-solid fa-square"></i> DỪNG';
-            btn.classList.replace('btn-danger', 'btn-secondary');
+            if(btn) {
+                btn.innerHTML = '<i class="fa-solid fa-square"></i> DỪNG';
+                btn.classList.replace('btn-danger', 'btn-secondary');
+            }
             document.getElementById('recordingIndicator').classList.remove('hidden');
             
             this.recordStartTime = Date.now();
@@ -694,12 +736,14 @@ const App = {
         } catch (err) { Utils.showToast("Lỗi khởi tạo quay video!"); console.error(err); }
     },
     stopRecording() {
-        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') this.mediaRecorder.stop();
+        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+            this.mediaRecorder.stop();
+        }
         this.isRecording = false;
         clearInterval(this.recordTimer);
         const btn = document.getElementById('btnRecordVideo');
         if (btn) { btn.innerHTML = '<i class="fa-solid fa-video"></i> QUAY'; btn.classList.replace('btn-secondary', 'btn-danger'); }
-        document.getElementById('recordingIndicator').classList.add('hidden');
+        document.getElementById('recordingIndicator')?.classList.add('hidden');
         document.getElementById('recordingTime').textContent = '00:00';
     },
 
