@@ -51,6 +51,15 @@
             </div>
         <!-- BẢNG ĐIỀU KHIỂN ZOOM & ĐỘ SÁNG -->
 <div class="camera-controls-panel" style="background: rgba(0,0,0,0.85); padding: 12px 18px; border-radius: 8px; margin: 10px auto 110px auto; max-width: 500px; display: flex; flex-direction: column; gap: 10px; border: 1px solid #555; position: relative; z-index: 10;">
+<!-- CHỌN THIẾT BỊ CAMERA -->
+    <div style="margin-bottom: 10px;">
+        <label for="cameraSelect" style="display: block; color: #ffeb3b; font-size: 14px; font-weight: bold; margin-bottom: 4px;">
+            <i class="fa-solid fa-video"></i> Chọn Camera:
+        </label>
+        <select id="cameraSelect" style="width: 100%; padding: 6px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; cursor: pointer;">
+            <option value="">-- Chọn thiết bị camera --</option>
+        </select>
+    </div>    
     <div style="display: flex; align-items: center; justify-content: space-between; color: #ffeb3b; font-size: 14px; font-weight: bold;">
         <span><i class="fa-solid fa-magnifying-glass"></i> Phóng to (Zoom):</span>
         <input type="range" id="zoomRange" min="1" max="3" step="0.1" value="1" style="width: 58%; cursor: pointer;">

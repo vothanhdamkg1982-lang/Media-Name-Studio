@@ -501,68 +501,119 @@ const App = {
     },
 
     // ==========================================
-    // CAMERA & WATERMARK RENDERING
-    // ==========================================
-    async startCamera() {
-        if (this.rawStream) return;
+        // CAMERA & WATERMARK RENDERING
+        // ==========================================
+        async initCameraSelector() {
+            const selector = document.getElementById('cameraSelect');
+            if (!selector) return;
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                
+                selector.innerHTML = '<option value="">-- Mặc định hệ thống --</option>';
+                videoDevices.forEach((device, index) => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Camera ${index + 1}`;
+                    selector.appendChild(option);
+                });
 
-        const video = document.getElementById('rawVideo');
-        try {
-            const constraints = {
-                video: { facingMode: this.cameraFacingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-                audio: true
-            };
-            this.rawStream = await navigator.mediaDevices.getUserMedia(constraints);
-            video.srcObject = this.rawStream;
-            video.onloadedmetadata = () => {
-                video.play();
-                this.startCanvasLoop();
-            };
-        } catch (err) {
-            Utils.showToast("Không thể truy cập Camera/Microphone!");
-            console.error(err);
-        }
-    },
-
-    stopCamera() {
-        if (this.isRecording) this.stopRecording();
-        if (this.rawStream) {
-            this.rawStream.getTracks().forEach(track => track.stop());
-            this.rawStream = null;
-        }
-        if (this.animationFrameId) {
-            cancelAnimationFrame(this.animationFrameId);
-            this.animationFrameId = null;
-        }
-    },
-
-    switchCamera() {
-        this.stopCamera();
-        this.cameraFacingMode = (this.cameraFacingMode === 'environment') ? 'user' : 'environment';
-        this.startCamera();
-    },
-
-    startCanvasLoop() {
-        const video = document.getElementById('rawVideo');
-        const canvas = document.getElementById('outputCanvas');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-
-        const render = () => {
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                }
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                this.drawWatermark(ctx, canvas);
+                selector.onchange = (e) => {
+                    this.startCamera(e.target.value);
+                };
+            } catch (e) {
+                console.error("Lỗi liệt kê camera:", e);
             }
+        },
+
+        async startCamera(deviceId = '') {
             if (this.rawStream) {
-                this.animationFrameId = requestAnimationFrame(render);
+                this.rawStream.getTracks().forEach(track => track.stop());
             }
-        };
-        render();
-    },
+
+            const video = document.getElementById('rawVideo');
+            try {
+                const constraints = {
+                    video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: this.cameraFacingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+                    audio: true
+                };
+                this.rawStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = this.rawStream;
+                video.onloadedmetadata = () => {
+                    video.play();
+                    this.startCanvasLoop();
+                };
+
+                const selector = document.getElementById('cameraSelect');
+                if (selector && selector.options.length <= 1) {
+                    this.initCameraSelector();
+                }
+            } catch (err) {
+                Utils.showToast("Không thể truy cập Camera!");
+                console.error(err);
+            }
+        },
+
+        stopCamera() {
+            if (this.isRecording) this.stopRecording();
+            if (this.rawStream) {
+                this.rawStream.getTracks().forEach(track => track.stop());
+                this.rawStream = null;
+            }
+            if (this.animationFrameId) {
+                cancelAnimationFrame(this.animationFrameId);
+                this.animationFrameId = null;
+            }
+        },
+
+        switchCamera() {
+            this.stopCamera();
+            this.cameraFacingMode = (this.cameraFacingMode === 'environment') ? 'user' : 'environment';
+            this.startCamera();
+        },
+
+        startCanvasLoop() {
+            const video = document.getElementById('rawVideo');
+            const canvas = document.getElementById('outputCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+
+            const render = () => {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                    }
+
+                    const zoom = parseFloat(document.getElementById('zoomRange')?.value) || 1;
+                    const brightness = parseFloat(document.getElementById('brightnessRange')?.value) || 1;
+
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.save();
+
+                    if (brightness !== 1) {
+                        ctx.filter = `brightness(${brightness})`;
+                    }
+
+                    if (zoom !== 1) {
+                        const centerX = canvas.width / 2;
+                        const centerY = canvas.height / 2;
+                        ctx.translate(centerX, centerY);
+                        ctx.scale(zoom, zoom);
+                        ctx.translate(-centerX, -centerY);
+                    }
+
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    ctx.restore();
+
+                    this.drawWatermark(ctx, canvas);
+                }
+                if (this.rawStream) {
+                    this.animationFrameId = requestAnimationFrame(render);
+                }
+            };
+            render();
+        },
 
     drawWatermark(ctx, canvas) {
         const lines = [];
