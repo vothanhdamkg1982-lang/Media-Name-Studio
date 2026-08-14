@@ -2,17 +2,17 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>MEDIA NAME STUDIO</title>
 
-    <!-- 1. Thư viện Supabase JS (Tải trước script chính) -->
+    <!-- Thư viện Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- 2. Thư viện xử lý Excel -->
+    <!-- Thư viện xử lý Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <!-- 3. Thư viện nén ZIP và lưu file -->
+    <!-- Thư viện nén ZIP và lưu file -->
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
-    <!-- 4. Font & Icons -->
+    <!-- Font & Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     
     <link rel="stylesheet" href="style.css">
@@ -31,9 +31,8 @@
             <button id="btnLogout" class="btn btn-danger btn-sm"><i class="fa-solid fa-right-from-bracket"></i> Đăng xuất</button>
         </div>
         <div id="loginSection" class="login-section">
-            <p>Đăng nhập Google để tự động đồng bộ ảnh và video lên đám mây:</p>
             <button id="btnLoginGoogle" class="btn btn-google">
-                <i class="fa-brands fa-google"></i> Đăng nhập bằng Google
+                <i class="fa-brands fa-google"></i> Đăng nhập Google để đồng bộ
             </button>
         </div>
     </div>
@@ -42,44 +41,49 @@
     <main class="app-main">
         <!-- TAB 1: CAMERA -->
         <section id="tab-camera" class="tab-content active">
-            <div class="camera-container">
-                <video id="rawVideo" autoplay playsinline muted style="display: none;"></video>
-                <canvas id="outputCanvas"></canvas>
-                <div id="recordingIndicator" class="recording-indicator hidden">
-                    <span class="dot"></span> REC <span id="recordingTime">00:00</span>
+            <div class="camera-wrapper">
+                <div class="camera-container">
+                    <video id="rawVideo" autoplay playsinline muted style="display: none;"></video>
+                    <canvas id="outputCanvas"></canvas>
+                    <div id="recordingIndicator" class="recording-indicator hidden">
+                        <span class="dot"></span> REC <span id="recordingTime">00:00</span>
+                    </div>
+                </div>
+
+                <!-- BẢNG ĐIỀU KHIỂN ZOOM & ĐỘ SÁNG -->
+                <div class="camera-controls-panel">
+                    <div class="control-group">
+                        <label for="cameraSelect"><i class="fa-solid fa-video"></i> Chọn Camera:</label>
+                        <select id="cameraSelect">
+                            <option value="">-- Mặc định hệ thống --</option>
+                        </select>
+                    </div>    
+                    <div class="control-group inline">
+                        <label><i class="fa-solid fa-magnifying-glass"></i> Zoom:</label>
+                        <input type="range" id="zoomRange" min="1" max="3" step="0.1" value="1">
+                    </div>
+                    <div class="control-group inline">
+                        <label><i class="fa-solid fa-sun"></i> Sáng:</label>
+                        <input type="range" id="brightnessRange" min="0.5" max="2.8" step="0.1" value="1">
+                    </div>
+                    <button id="btnResetCamera" class="btn btn-secondary w-100">
+                        <i class="fa-solid fa-rotate-right"></i> Đặt lại
+                    </button>
                 </div>
             </div>
-        <!-- BẢNG ĐIỀU KHIỂN ZOOM & ĐỘ SÁNG -->
-<div class="camera-controls-panel" style="background: rgba(0,0,0,0.85); padding: 8px 12px; border-radius: 8px; margin: 5px auto; max-width: 450px; position: relative; z-index: 10;">
-<!-- CHỌN THIẾT BỊ CAMERA -->
-    <div style="margin-bottom: 10px;">
-        <label for="cameraSelect" style="display: block; color: #ffeb3b; font-size: 14px; font-weight: bold; margin-bottom: 4px;">
-            <i class="fa-solid fa-video"></i> Chọn Camera:
-        </label>
-        <select id="cameraSelect" style="width: 100%; padding: 6px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; cursor: pointer;">
-            <option value="">-- Chọn thiết bị camera --</option>
-        </select>
-    </div>    
-    <div style="display: flex; align-items: center; justify-content: space-between; color: #ffeb3b; font-size: 14px; font-weight: bold;">
-        <span><i class="fa-solid fa-magnifying-glass"></i> Phóng to (Zoom):</span>
-        <input type="range" id="zoomRange" min="1" max="3" step="0.1" value="1" style="width: 58%; cursor: pointer;">
-    </div>
-    <div style="display: flex; align-items: center; justify-content: space-between; color: #ffeb3b; font-size: 14px; font-weight: bold;">
-        <span><i class="fa-solid fa-sun"></i> Độ sáng:</span>
-        <input type="range" id="brightnessRange" min="0.5" max="2.8" step="0.1" value="1" style="width: 58%; cursor: pointer;">
-    </div>
-    <button id="btnResetCamera" class="btn btn-secondary w-100" style="background: #444; color: #fff; padding: 6px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 6px;">
-        <i class="fa-solid fa-rotate-right"></i> Đặt lại mặc định (Reset)
-    </button>
-</div>
-            <div class="camera-controls">
-                <div class="control-row">
-                    <!-- NÚT GỌI CAMERA GỐC ĐIỆN THOẠI -->
-    <input type="file" id="nativeCameraInput" accept="image/*" capture="environment" style="display: none;">
-    <button type="button" class="btn btn-success" onclick="document.getElementById('nativeCameraInput').click()" title="Chụp bằng camera gốc">
-        <i class="fa-solid fa-camera-retro"></i> Camera gốc
-    </button>
-                    <button class="btn icon-btn" id="btnSwitchCamera" title="Đổi camera"><i class="fa-solid fa-rotate"></i></button>
+
+            <!-- CÁC NÚT CAMERA -->
+            <div class="camera-action-buttons">
+                <div class="action-row top-actions">
+                    <input type="file" id="nativeCameraInput" accept="image/*" capture="environment" style="display: none;">
+                    <button type="button" class="btn btn-success" id="btnNativeCamera">
+                        <i class="fa-solid fa-camera-retro"></i> Camera gốc
+                    </button>
+                    <button class="btn btn-secondary" id="btnSwitchCamera" title="Đổi camera">
+                        <i class="fa-solid fa-rotate"></i> Đổi Cam
+                    </button>
+                </div>
+                <div class="action-row main-actions">
                     <button class="btn btn-primary btn-large" id="btnCapturePhoto"><i class="fa-solid fa-camera"></i> CHỤP</button>
                     <button class="btn btn-danger btn-large" id="btnRecordVideo"><i class="fa-solid fa-video"></i> QUAY</button>
                 </div>
@@ -95,25 +99,19 @@
                         <i class="fa-solid fa-file-excel"></i> Import Excel
                     </label>
                     <input type="file" id="excelUpload" accept=".xlsx, .xls, .csv" hidden>
-                    
                     <button class="btn btn-primary" id="btnDownloadSample" title="Tải file Excel mẫu">
                         <i class="fa-solid fa-download"></i> File mẫu
                     </button>
                     <button class="btn btn-danger" id="btnClearList"><i class="fa-solid fa-trash"></i> Xóa DS</button>
                 </div>
-
                 <div class="search-box">
                     <input type="text" id="searchStudent" placeholder="🔍 Tìm kiếm học sinh...">
                 </div>
-
                 <div class="add-manual">
                     <input type="text" id="manualName" placeholder="Nhập tên thủ công...">
                     <button class="btn btn-primary" id="btnAddManual"><i class="fa-solid fa-plus"></i> Thêm</button>
                 </div>
-
-                <ul id="studentList" class="data-list">
-                    <!-- Danh sách học sinh sẽ được render ở đây -->
-                </ul>
+                <ul id="studentList" class="data-list"></ul>
             </div>
         </section>
 
@@ -131,9 +129,7 @@
                     <button class="btn btn-primary" id="btnExportSelected"><i class="fa-solid fa-file-zipper"></i> Xuất ZIP</button>
                     <button class="btn btn-danger" id="btnDeleteSelected"><i class="fa-solid fa-trash"></i> Xóa chọn</button>
                 </div>
-                <div class="gallery-grid" id="galleryGrid">
-                    <!-- Các items media sẽ hiển thị ở đây -->
-                </div>
+                <div class="gallery-grid" id="galleryGrid"></div>
             </div>
         </section>
 
@@ -141,51 +137,53 @@
         <section id="tab-settings" class="tab-content">
             <div class="panel">
                 <h2>Cài đặt Watermark</h2>
-                <div class="form-group">
-                    <label for="setUnitName">Tên đơn vị / Trường học:</label>
-                    <input type="text" id="setUnitName" class="form-control">
-                </div>
-                <div class="form-group checkbox-group">
-                    <label><input type="checkbox" id="setShowUnit"> Hiển thị tên đơn vị</label>
-                    <label><input type="checkbox" id="setShowDate"> Hiển thị ngày giờ thực</label>
-                </div>
-                <div class="form-group">
-                    <label for="setPosition">Vị trí Watermark:</label>
-                    <select id="setPosition" class="form-control">
-                        <option value="top">Phía trên</option>
-                        <option value="bottom">Phía dưới</option>
-                        <option value="center">Ở giữa</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="setAlign">Căn chỉnh chữ:</label>
-                    <select id="setAlign" class="form-control">
-                        <option value="left">Căn trái</option>
-                        <option value="center">Căn giữa</option>
-                        <option value="right">Căn phải</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="setFontSize">Cỡ chữ (px):</label>
-                    <input type="number" id="setFontSize" class="form-control" value="32" min="12" max="100">
-                </div>
-                <div class="form-group">
-                    <label for="setColor">Màu chữ:</label>
-                    <input type="color" id="setColor" class="form-control color-picker" value="#ffffff">
-                </div>
-                <div class="form-group">
-                    <label for="setBgColor">Màu nền hộp chữ (RGBA):</label>
-                    <input type="text" id="setBgColor" class="form-control" value="rgba(0,0,0,0.5)">
-                    </div>
-                    <div class="form-group checkbox-group" style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #555;">
-                    <label style="cursor: pointer; color: #ffeb3b; font-weight: bold;">
-                        <input type="checkbox" id="settingWatermark"> 
-                        In tên và ngày chụp vào góc phải dưới ảnh
+                <div class="form-group checkbox-group highlight-box">
+                    <label>
+                        <input type="checkbox" id="settingWatermark"> In tên và ngày chụp vào ảnh
                     </label>
                 </div>
-                <button id="btnSaveSettings" class="btn btn-primary w-100 btn-large" style="margin-top: 15px; margin-bottom: 80px;">
-    <i class="fa-solid fa-floppy-disk"></i> LƯU CẤU HÌNH
-</button>
+                <div id="watermarkSettingsOptions" style="display: none;">
+                    <div class="form-group">
+                        <label for="setUnitName">Tên đơn vị / Trường học:</label>
+                        <input type="text" id="setUnitName" class="form-control">
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <label><input type="checkbox" id="setShowUnit"> Hiển thị tên đơn vị</label>
+                        <label><input type="checkbox" id="setShowDate"> Hiển thị ngày giờ thực</label>
+                    </div>
+                    <div class="form-group">
+                        <label for="setPosition">Vị trí Watermark:</label>
+                        <select id="setPosition" class="form-control">
+                            <option value="top">Phía trên</option>
+                            <option value="bottom">Phía dưới</option>
+                            <option value="center">Ở giữa</option>
+                            <option value="bottom-right">Góc phải dưới (Chuẩn)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="setAlign">Căn chỉnh chữ:</label>
+                        <select id="setAlign" class="form-control">
+                            <option value="left">Căn trái</option>
+                            <option value="center">Căn giữa</option>
+                            <option value="right">Căn phải</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="setFontSize">Cỡ chữ (px):</label>
+                        <input type="number" id="setFontSize" class="form-control" value="20" min="12" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="setColor">Màu chữ:</label>
+                        <input type="color" id="setColor" class="form-control color-picker" value="#ff2407">
+                    </div>
+                    <div class="form-group">
+                        <label for="setBgColor">Màu nền hộp chữ (RGBA):</label>
+                        <input type="text" id="setBgColor" class="form-control" value="transparent">
+                    </div>
+                </div>
+                <button id="btnSaveSettings" class="btn btn-primary w-100 btn-large mt-3">
+                    <i class="fa-solid fa-floppy-disk"></i> LƯU CẤU HÌNH
+                </button>
             </div>
         </section>
     </main>
@@ -201,15 +199,13 @@
     <!-- TOAST NOTIFICATION -->
     <div id="toast" class="toast hidden"></div>
 
-    <!-- MODAL XEM ẢNH -->
-    <div id="imageModal" class="modal">
+    <!-- MODALS -->
+    <div id="imageModal" class="modal hidden">
         <span class="modal-close" id="closeImageModal">&times;</span>
         <img id="modalImg" class="modal-content" alt="Preview Image">
         <div id="modalCaption" class="modal-caption"></div>
     </div>
-
-    <!-- MODAL XEM VIDEO -->
-    <div id="videoModal" class="modal">
+    <div id="videoModal" class="modal hidden">
         <span class="modal-close" id="closeVideoModal">&times;</span>
         <video id="modalVideo" class="modal-content" controls></video>
         <div id="modalVideoCaption" class="modal-caption"></div>
