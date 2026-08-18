@@ -1147,6 +1147,36 @@ body.camera-fullscreen .auth-container {
 body.camera-fullscreen .app-main {
     padding-top: 0;
 }
+/* 1. Khóa cuộn trang hoàn toàn trên body và html để app chạy chuẩn dạng "App toàn màn hình" */
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh; /* Sử dụng dynamic viewport height chuẩn cho mobile (tránh bị lẹm thanh công cụ trình duyệt) */
+    overflow: hidden; /* Chặn tuyệt đối việc cuộn lên xuống */
+    position: fixed;  /* Tránh hiện tượng kéo nảy (bounce scroll) trên iOS/Android */
+}
+
+/* 2. Cố định vùng chứa camera (desktopCameraZone / mobileCameraZone) vừa khít màn hình */
+#desktopCameraZone, #mobileCameraZone {
+    width: 100%;
+    height: 100%;
+    max-height: 100dvh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    position: relative;
+}
+
+/* 3. Ép thẻ video hoặc canvas hiển thị gọn trong khung mà không bị đẩy vỡ giao diện */
+#desktopCameraZone video, #mobileCameraZone video,
+#desktopCameraZone canvas, #mobileCameraZone canvas {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover; /* 'cover' giúp lấp đầy màn hình không bị viền đen, hoặc đổi thành 'contain' nếu muốn thấy toàn bộ khung hình camera */
+}
     </style>
 </head>
 
