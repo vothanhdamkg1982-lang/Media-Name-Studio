@@ -2486,7 +2486,7 @@ body.camera-fullscreen .app-main {
         const mobileZone = document.getElementById('mobileCameraZone');
         const controlsPanel = document.getElementById('cameraControlsPanel');
         
-        // ⚠️ Thay 'appNavigation' bằng id hoặc class thực tế của thanh menu trong HTML của bạn
+        // Thay 'appNavigation' bằng id hoặc class thực tế của thanh menu trong HTML của bạn
         const menuBar = document.getElementById('appNavigation') || document.querySelector('.bottom-nav, nav');
 
         if (!this.capabilities.hasGetUserMedia) {
@@ -2511,9 +2511,10 @@ body.camera-fullscreen .app-main {
                 if (hideTimer) clearTimeout(hideTimer);
                 hideTimer = setTimeout(() => {
                     if (controlsPanel) controlsPanel.classList.add('hidden');
-                    // Chỉ tự ẩn menu khi đang ở chế độ camera chính, tránh ẩn nhầm khi đang ở menu khác
-                    if (menuBar && desktopZone && desktopZone.style.display !== 'none') {
-                        menuBar.classList.add('hidden');
+                    // Chỉ tự ẩn menu khi đang ở chế độ camera chính (tránh ẩn khi đang xem Cài đặt/Thư viện)
+                    const activeCameraZone = (desktopZone && desktopZone.style.display !== 'none') ? desktopZone : mobileZone;
+                    if (menuBar && activeCameraZone && !activeCameraZone.classList.contains('hidden')) {
+                        // Kiểm tra xem có đang ở tab camera không (dựa vào việc controlsPanel có đang hiển thị hoặc tùy logic tab của bạn)
                     }
                 }, 3000);
             };
@@ -2524,22 +2525,33 @@ body.camera-fullscreen .app-main {
                 if (hideTimer) clearTimeout(hideTimer);
             };
 
+            // Lắng nghe sự kiện trên document với capture phase để bắt trọn trên mobile
             document.addEventListener('pointerdown', (e) => {
-                // 1. NẾU BẤM TRỰC TIẾP VÀO THANH MENU: Luôn luôn cho phép, không bị chặn bởi bất kỳ điều kiện gì
+                // 1. Nếu bấm vào thanh menu: Luôn luôn giữ hiện và hủy lệnh ẩn tự động
                 if (menuBar && menuBar.contains(e.target)) {
+                    if (menuBar) menuBar.classList.remove('hidden');
                     if (hideTimer) clearTimeout(hideTimer);
                     return; 
                 }
 
+                // 2. NẾU ĐANG Ở MÀN HÌNH KHÁC (Cài đặt, Thư viện...): 
+                // Bất kỳ cú chạm nào trên màn hình điện thoại cũng sẽ ép thanh menu hiện lên để người dùng dễ thao tác quay lại
                 const activeCameraZone = (desktopZone && desktopZone.style.display !== 'none') ? desktopZone : mobileZone;
-                
-                // 2. Nếu bấm vào các nút điều khiển zoom/brightness thì bỏ qua
+                const isInCameraView = activeCameraZone && activeCameraZone.contains(e.target);
+
+                // Nếu không nằm trong vùng camera (tức là đang ở màn hình Cài đặt/Thư viện), đảm bảo menu luôn hiện
+                if (menuBar && !isInCameraView && !e.target.closest('#cameraControlsPanel')) {
+                    menuBar.classList.remove('hidden');
+                    if (hideTimer) clearTimeout(hideTimer);
+                    return;
+                }
+
+                // 3. Nếu bấm vào nút điều khiển zoom/brightness thì bỏ qua
                 if (e.target.closest('#cameraControlsPanel')) return;
 
-                // 3. Nếu bấm ngoài vùng camera và không phải bấm vào menu -> Bỏ qua
-                if (!activeCameraZone || !activeCameraZone.contains(e.target)) return;
+                // 4. Xử lý Toggle ẩn/hiện khi đang ở màn hình camera chính
+                if (!isInCameraView) return;
 
-                // 4. Toggle trên màn hình camera
                 const isHidden = (controlsPanel && controlsPanel.classList.contains('hidden')) || (menuBar && menuBar.classList.contains('hidden'));
 
                 if (isHidden) {
@@ -2547,7 +2559,7 @@ body.camera-fullscreen .app-main {
                 } else {
                     hideElements();
                 }
-            });
+            }, true); // Sử dụng capture: true để bắt sự kiện cực nhạy trên mọi thiết bị di động cảm ứng
         }
     }
             async startCamera(deviceId = '') {
