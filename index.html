@@ -5,13 +5,1132 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>MEDIA NAME STUDIO - Professional Media Capture & Watermark</title>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js">
+    </script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <style>
+        /* ===== VARIABLES ===== */
+        :root {
+            --primary: #007bff;
+            --primary-hover: #0056b3;
+            --danger: #dc3545;
+            --danger-hover: #bd2130;
+            --success: #28a745;
+            --success-hover: #218838;
+            --secondary: #6c757d;
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --text: #ffffff;
+            --border: #333333;
+            --radius: 10px;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        /* ===== RESET & BASE ===== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+        }
+
+        /* ===== HEADER ===== */
+        .app-header {
+            background: var(--panel-bg);
+            padding: calc(8px + env(safe-area-inset-top)) 15px 10px;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+            z-index: 50;
+            flex-shrink: 0;
+        }
+        .app-header h1 {
+            font-size: 1.05rem;
+            color: var(--primary);
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        .current-student-display {
+            font-size: 0.95rem;
+            font-weight: bold;
+            color: #ffc107;
+        }
+
+        /* ===== AUTH ===== */
+        .auth-container {
+            background: #181818;
+            border-bottom: 1px solid var(--border);
+            padding: 8px 15px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .btn-google {
+            background: #db4437;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            font-size: 0.85rem;
+        }
+        .btn-google:hover {
+            opacity: 0.85;
+        }
+
+        /* ===== MAIN ===== */
+        .app-main {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            position: relative;
+        }
+        .tab-content {
+            display: none;
+            height: 100%;
+            padding-bottom: calc(70px + env(safe-area-inset-bottom));
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        /* ===== CAMERA TAB ===== */
+        #tab-camera.tab-content {
+            padding-bottom: 0;
+            overflow: hidden;
+        }
+        .camera-wrapper {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            position: relative;
+            background: #000;
+        }
+        .camera-container {
+            flex: 1;
+            position: relative;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            width: 100%;
+        }
+        .camera-preview-zone {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        #outputCanvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.1s ease, filter 0.1s ease;
+            transform-origin: center center;
+        }
+        .camera-placeholder-zone {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #0a0a0a;
+        }
+        .mobile-camera-hint {
+            text-align: center;
+            color: #aaa;
+            padding: 20px;
+        }
+        .mobile-camera-hint i {
+            color: #555;
+            margin-bottom: 16px;
+            display: block;
+        }
+        .mobile-camera-hint p {
+            font-size: 1.1rem;
+            margin: 6px 0;
+            color: #ccc;
+        }
+        .mobile-camera-hint .hint-sub {
+            font-size: 0.85rem;
+            color: #777;
+        }
+
+        .recording-indicator {
+            position: absolute;
+            top: calc(12px + env(safe-area-inset-top));
+            left: 15px;
+            background: rgba(0, 0, 0, 0.75);
+            color: #ff4d4d;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 30;
+            border: 1px solid rgba(255, 77, 77, 0.4);
+        }
+        .dot {
+            width: 10px;
+            height: 10px;
+            background: red;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            50% {
+                opacity: 0.2;
+            }
+        }
+
+        .processing-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .processing-card {
+            background: #1e1e1e;
+            border: 1px solid var(--border);
+            padding: 24px 30px;
+            border-radius: 16px;
+            text-align: center;
+            width: 85%;
+            max-width: 360px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        .progress-bar-container {
+            width: 100%;
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            margin: 14px 0 8px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: var(--primary);
+            transition: width 0.2s ease;
+        }
+        .processing-subtext {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 8px;
+        }
+
+        /* ===== CAMERA CONTROLS ===== */
+        .camera-controls-panel {
+            position: absolute;
+            right: calc(12px + env(safe-area-inset-right));
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 25;
+            background: rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(10px);
+            padding: 12px 8px;
+            border-radius: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .device-select-group select {
+            background: rgba(30, 30, 30, 0.8);
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 12px;
+            padding: 4px 6px;
+            font-size: 0.75rem;
+            max-width: 70px;
+        }
+        .btn-icon-control {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .btn-icon-control:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        .vertical-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            color: #ffeb3b;
+        }
+        .icon-bright,
+        .icon-zoom {
+            font-size: 1rem;
+            color: #ffeb3b;
+        }
+        input[type="range"].vertical-slider {
+            -webkit-appearance: slider-vertical;
+            writing-mode: vertical-lr;
+            direction: rtl;
+            width: 24px;
+            height: 90px;
+            background: transparent;
+            cursor: pointer;
+        }
+        .btn-icon-reset {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .btn-icon-reset:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* ===== CAMERA ACTION BUTTONS ===== */
+        .camera-action-buttons {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 10px 16px calc(75px + env(safe-area-inset-bottom));
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            width: 100%;
+            z-index: 20;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .btn-action {
+            background: transparent;
+            border: none;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.8rem;
+            transition: transform 0.15s ease;
+        }
+        .btn-action:active {
+            transform: scale(0.92);
+        }
+        .btn-capture-main .capture-ring {
+            width: 58px;
+            height: 58px;
+            border-radius: 50%;
+            border: 4px solid #fff;
+            background: rgba(255, 255, 255, 0.3);
+            transition: transform 0.1s ease, background 0.2s;
+        }
+        .btn-capture-main:active .capture-ring {
+            transform: scale(0.9);
+            background: #fff;
+        }
+        .btn-record i {
+            font-size: 1.8rem;
+            color: #ff4d4d;
+        }
+        .btn-switch i {
+            font-size: 1.6rem;
+            color: #007bff;
+        }
+
+        /* ================================================================
+                   SETTINGS PANEL — OPTIMIZED FOR WINDOW + MOBILE
+                   ================================================================ */
+        .panel {
+            padding: 16px 14px;
+            max-width: 780px;
+            margin: 0 auto;
+        }
+        .panel h2 {
+            font-size: 1.15rem;
+            margin-bottom: 14px;
+            color: #fff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .auto-save-status {
+            font-size: 0.7rem;
+            color: var(--success);
+            font-weight: normal;
+            background: rgba(40, 167, 69, 0.12);
+            padding: 3px 10px;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .auto-save-status.saving {
+            color: #ffc107;
+            background: rgba(255, 193, 7, 0.12);
+        }
+
+        /* --- Form Groups --- */
+        .form-group {
+            margin-bottom: 14px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 5px;
+            color: #ddd;
+            letter-spacing: 0.2px;
+        }
+
+        /* --- Controls --- */
+        .form-control {
+            width: 100%;
+            padding: 9px 12px;
+            background: #2a2a2a;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.9rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            outline: none;
+        }
+        .form-control:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+        }
+        .form-control::placeholder {
+            color: #666;
+        }
+
+        select.form-control {
+            appearance: auto;
+            background-color: #2a2a2a;
+            cursor: pointer;
+        }
+        select.form-control option {
+            background: #1e1e1e;
+            color: #fff;
+        }
+
+        input[type="color"].form-control {
+            height: 44px;
+            padding: 3px;
+            cursor: pointer;
+            border-radius: 8px;
+        }
+
+        /* --- Checkbox Groups --- */
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px 20px;
+            padding: 6px 0;
+        }
+        .checkbox-group label {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 0.85rem;
+            font-weight: normal;
+            color: #ccc;
+            cursor: pointer;
+            margin-bottom: 0;
+            transition: color 0.2s;
+        }
+        .checkbox-group label:hover {
+            color: #fff;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: 17px;
+            height: 17px;
+            accent-color: var(--primary);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        /* --- Highlight Box (Watermark Enable) --- */
+        .highlight-box {
+            background: rgba(0, 123, 255, 0.07);
+            border: 1px solid rgba(0, 123, 255, 0.2);
+            padding: 14px 16px;
+            border-radius: var(--radius);
+            margin-bottom: 16px;
+        }
+        .highlight-box .checkbox-group {
+            padding: 0;
+        }
+        .highlight-box .checkbox-group label {
+            font-weight: 600;
+            color: #fff;
+            font-size: 0.9rem;
+        }
+
+        /* --- Location Card --- */
+        .location-setting-card {
+            background: #252525;
+            padding: 14px 16px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            margin-bottom: 14px;
+        }
+        .location-card-title {
+            color: #ffc107 !important;
+            font-weight: 600 !important;
+            font-size: 0.9rem !important;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+        .location-status-text {
+            font-size: 0.8rem;
+            margin: 6px 0 4px;
+            padding: 4px 0;
+            color: #aaa;
+        }
+        .setting-desc-text {
+            font-size: 0.72rem;
+            color: #777;
+            margin-top: 2px;
+            line-height: 1.4;
+        }
+
+        /* --- Save Button --- */
+        .btn {
+            padding: 9px 18px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            transition: background 0.2s, transform 0.1s, opacity 0.2s;
+            text-decoration: none;
+        }
+        .btn:active {
+            transform: scale(0.96);
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+        .btn-secondary {
+            background: var(--secondary);
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        .btn-danger:hover {
+            background: var(--danger-hover);
+        }
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        .btn-success:hover {
+            background: var(--success-hover);
+        }
+        .btn-sm {
+            padding: 4px 10px;
+            font-size: 0.72rem;
+            border-radius: 6px;
+        }
+        .btn-large {
+            padding: 12px 20px;
+            font-size: 0.95rem;
+        }
+        .w-100 {
+            width: 100%;
+            justify-content: center;
+        }
+        .mt-1 {
+            margin-top: 4px;
+        }
+        .mt-2 {
+            margin-top: 8px;
+        }
+        .mt-3 {
+            margin-top: 14px;
+        }
+
+        /* ===== LIST TAB ===== */
+        .list-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .search-box input,
+        .add-manual input {
+            width: 100%;
+            padding: 10px 14px;
+            background: #2a2a2a;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.9rem;
+            outline: none;
+        }
+        .search-box input:focus,
+        .add-manual input:focus {
+            border-color: var(--primary);
+        }
+        .add-manual {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .add-manual input {
+            margin-bottom: 0;
+        }
+
+        .data-list {
+            list-style: none;
+        }
+        .data-list li {
+            background: #252525;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .data-list li.selected {
+            border-color: var(--primary);
+            background: rgba(0, 123, 255, 0.12);
+        }
+        .data-list li:hover {
+            background: #2d2d2d;
+        }
+
+        /* ===== GALLERY ===== */
+        .gallery-controls-wrapper {
+            margin-bottom: 16px;
+        }
+        .gallery-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .select-inline {
+            width: auto;
+            padding: 8px 12px;
+            background: #2a2a2a;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: #fff;
+            font-size: 0.85rem;
+        }
+        .selection-action-bar {
+            background: #252525;
+            border: 1px solid var(--border);
+            padding: 12px 14px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .selection-status-row {
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+            color: #ccc;
+        }
+        .selection-buttons-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 12px;
+        }
+        .gallery-item {
+            background: #222;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            transition: border-color 0.2s;
+        }
+        .gallery-item:hover {
+            border-color: #555;
+        }
+        .gallery-item img,
+        .gallery-item video {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            background: #000;
+        }
+        .gallery-checkbox {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            z-index: 10;
+            width: 20px;
+            height: 20px;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+        .gallery-badges {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 10;
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .badge {
+            padding: 3px 7px;
+            border-radius: 4px;
+            font-size: 0.6rem;
+            font-weight: 600;
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            letter-spacing: 0.3px;
+        }
+        .sync-badge.synced {
+            background: #28a745;
+        }
+        .sync-badge.pending {
+            background: #ffc107;
+            color: #000;
+        }
+        .status-badge.wm-active {
+            background: #007bff;
+        }
+        .status-badge.failed {
+            background: #dc3545;
+            cursor: pointer;
+            border: none;
+            font-size: 0.6rem;
+        }
+        .status-badge.failed:hover {
+            background: #c82333;
+        }
+
+        .gallery-info {
+            padding: 8px 10px;
+            font-size: 0.78rem;
+        }
+        .gallery-info strong {
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .file-meta {
+            font-size: 0.65rem;
+            color: #888;
+        }
+
+        /* ===== BOTTOM NAV ===== */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: calc(60px + env(safe-area-inset-bottom));
+            background: var(--panel-bg);
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-start;
+            padding-top: 8px;
+            z-index: 80;
+        }
+        .nav-btn {
+            background: transparent;
+            border: none;
+            color: #888;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            padding: 0 6px;
+            transition: color 0.2s;
+        }
+        .nav-btn i {
+            font-size: 1.2rem;
+        }
+        .nav-btn.active {
+            color: var(--primary);
+        }
+        .nav-btn:hover {
+            color: #bbb;
+        }
+
+        /* ===== TOAST ===== */
+        .toast {
+            position: fixed;
+            bottom: calc(80px + env(safe-area-inset-bottom));
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.88);
+            color: white;
+            padding: 10px 22px;
+            border-radius: 24px;
+            font-size: 0.85rem;
+            z-index: 200;
+            border: 1px solid #444;
+            backdrop-filter: blur(4px);
+            max-width: 90%;
+            text-align: center;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .toast.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* ===== MODALS ===== */
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.92);
+            z-index: 150;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .modal.hidden {
+            display: none !important;
+        }
+        .modal-close {
+            position: absolute;
+            top: calc(20px + env(safe-area-inset-top));
+            right: 24px;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+            z-index: 10;
+            transition: opacity 0.2s;
+            line-height: 1;
+        }
+        .modal-close:hover {
+            opacity: 0.7;
+        }
+        .modal-content {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: 4px;
+        }
+        .modal-caption {
+            margin-top: 14px;
+            color: #ccc;
+            font-size: 0.85rem;
+            text-align: center;
+            max-width: 90%;
+            word-break: break-all;
+        }
+
+        /* ================================================================
+                   RESPONSIVE BREAKPOINTS
+                   ================================================================ */
+
+        /* --- Small phones (≤ 480px) --- */
+        @media (max-width: 480px) {
+            .panel {
+                padding: 12px 10px;
+            }
+            .panel h2 {
+                font-size: 1rem;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+            }
+            .form-group label {
+                font-size: 0.8rem;
+            }
+            .form-control {
+                font-size: 0.85rem;
+                padding: 8px 10px;
+            }
+            .checkbox-group {
+                gap: 8px 14px;
+            }
+            .checkbox-group label {
+                font-size: 0.8rem;
+            }
+            .location-setting-card {
+                padding: 12px 12px;
+            }
+            .btn-large {
+                padding: 10px 14px;
+                font-size: 0.85rem;
+            }
+            .highlight-box {
+                padding: 12px 12px;
+            }
+            .gallery-grid {
+                grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+                gap: 8px;
+            }
+            .gallery-item img,
+            .gallery-item video {
+                height: 90px;
+            }
+            .camera-controls-panel {
+                padding: 8px 5px;
+                gap: 10px;
+                right: 6px;
+            }
+            .camera-controls-panel .btn-icon-control,
+            .camera-controls-panel .btn-icon-reset {
+                width: 28px;
+                height: 28px;
+                font-size: 0.75rem;
+            }
+            input[type="range"].vertical-slider {
+                height: 60px;
+                width: 20px;
+            }
+            .device-select-group select {
+                font-size: 0.65rem;
+                max-width: 56px;
+                padding: 2px 4px;
+            }
+            .btn-capture-main .capture-ring {
+                width: 48px;
+                height: 48px;
+            }
+            .camera-action-buttons {
+                padding: 6px 10px calc(68px + env(safe-area-inset-bottom));
+                gap: 4px;
+            }
+            .btn-action .btn-label {
+                font-size: 0.65rem;
+            }
+            .btn-record i {
+                font-size: 1.4rem;
+            }
+            .btn-switch i {
+                font-size: 1.3rem;
+            }
+        }
+
+        /* --- Tablets & small desktops (481px - 768px) --- */
+        @media (min-width: 481px) and (max-width: 768px) {
+            .panel {
+                padding: 18px 20px;
+            }
+            .gallery-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            }
+            .camera-controls-panel {
+                padding: 10px 6px;
+                gap: 12px;
+                right: 10px;
+            }
+        }
+
+        /* --- Desktops (≥ 769px) --- */
+        @media (min-width: 769px) {
+            .panel {
+                padding: 24px 32px;
+            }
+            .panel h2 {
+                font-size: 1.3rem;
+            }
+            .form-group {
+                margin-bottom: 18px;
+            }
+            .form-group label {
+                font-size: 0.9rem;
+            }
+            .form-control {
+                font-size: 0.95rem;
+                padding: 10px 14px;
+            }
+            .checkbox-group label {
+                font-size: 0.9rem;
+            }
+            .btn-large {
+                padding: 14px 24px;
+                font-size: 1rem;
+            }
+            .gallery-grid {
+                grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+                gap: 16px;
+            }
+            .gallery-item img,
+            .gallery-item video {
+                height: 150px;
+            }
+            .camera-controls-panel {
+                padding: 16px 10px;
+                gap: 16px;
+                right: 16px;
+            }
+            .camera-controls-panel .btn-icon-control,
+            .camera-controls-panel .btn-icon-reset {
+                width: 38px;
+                height: 38px;
+                font-size: 1rem;
+            }
+            input[type="range"].vertical-slider {
+                height: 110px;
+                width: 28px;
+            }
+            .device-select-group select {
+                font-size: 0.8rem;
+                max-width: 100px;
+                padding: 4px 8px;
+            }
+            .btn-capture-main .capture-ring {
+                width: 68px;
+                height: 68px;
+            }
+            .camera-action-buttons {
+                padding: 12px 24px calc(72px + env(safe-area-inset-bottom));
+                gap: 16px;
+            }
+            .btn-action .btn-label {
+                font-size: 0.85rem;
+            }
+            .btn-record i {
+                font-size: 2rem;
+            }
+            .btn-switch i {
+                font-size: 1.8rem;
+            }
+            .bottom-nav {
+                height: calc(68px + env(safe-area-inset-bottom));
+                padding-top: 10px;
+            }
+            .nav-btn {
+                font-size: 0.8rem;
+            }
+            .nav-btn i {
+                font-size: 1.4rem;
+            }
+        }
+
+        /* --- Large desktops (≥ 1200px) --- */
+        @media (min-width: 1200px) {
+            .panel {
+                max-width: 860px;
+                padding: 32px 40px;
+            }
+            .gallery-grid {
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            }
+        }
+
+        /* ===== UTILITY ===== */
+        .hidden {
+            display: none !important;
+        }
+        .flex-center {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .gap-1 {
+            gap: 6px;
+        }
+        .text-muted {
+            color: #888;
+        }
+        .text-sm {
+            font-size: 0.8rem;
+        }
+    </style>
 </head>
+
 <body>
     <header class="app-header">
         <h1><i class="fa-solid fa-camera-retro"></i> MEDIA NAME STUDIO</h1>
@@ -31,6 +1150,7 @@
     </div>
 
     <main class="app-main">
+        <!-- ===== CAMERA TAB ===== -->
         <section id="tab-camera" class="tab-content active">
             <div class="camera-wrapper">
                 <div id="cameraSurface" class="camera-container">
@@ -109,6 +1229,7 @@
             </div>
         </section>
 
+        <!-- ===== LIST TAB ===== -->
         <section id="tab-list" class="tab-content">
             <div class="panel">
                 <h2>Quản lý danh sách học sinh</h2>
@@ -131,12 +1252,13 @@
             </div>
         </section>
 
+        <!-- ===== GALLERY TAB ===== -->
         <section id="tab-gallery" class="tab-content">
             <div class="panel">
                 <h2>Thư viện Media</h2>
                 <div class="gallery-controls-wrapper">
                     <div class="gallery-controls">
-                        <select id="filterType" class="form-control select-inline">
+                        <select id="filterType" class="select-inline">
                             <option value="all">Tất cả</option>
                             <option value="photo">Chỉ Ảnh</option>
                             <option value="video">Chỉ Video</option>
@@ -162,29 +1284,49 @@
             </div>
         </section>
 
+        <!-- ===== SETTINGS TAB — OPTIMIZED ===== -->
         <section id="tab-settings" class="tab-content">
             <div class="panel">
-                <h2>Cài đặt Watermark <span id="autoSaveIndicator" class="auto-save-status"><i class="fa-solid fa-check"></i> Tự động lưu</span></h2>
-                <div class="form-group checkbox-group highlight-box">
-                    <label><input type="checkbox" id="settingWatermark"> In tên và ngày chụp vào ảnh/video</label>
+                <h2>
+                    Cài đặt Watermark
+                    <span id="autoSaveIndicator" class="auto-save-status"><i class="fa-solid fa-check"></i> Tự động lưu</span>
+                </h2>
+
+                <!-- Bật/tắt watermark -->
+                <div class="form-group highlight-box">
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" id="settingWatermark"> In tên và ngày chụp vào ảnh/video</label>
+                    </div>
                 </div>
-                <div id="watermarkSettingsOptions" style="display: none;">
+
+                <!-- Các tùy chọn watermark -->
+                <div id="watermarkSettingsOptions">
+
+                    <!-- Tên đơn vị -->
                     <div class="form-group">
                         <label for="setUnitName">Tên đơn vị / Trường học:</label>
-                        <input type="text" id="setUnitName" class="form-control">
+                        <input type="text" id="setUnitName" class="form-control" placeholder="VD: TRƯỜNG TH.TQT">
                     </div>
-                    <div class="form-group checkbox-group">
-                        <label><input type="checkbox" id="setShowUnit"> Hiển thị tên đơn vị</label>
-                        <label><input type="checkbox" id="setShowDate"> Hiển thị ngày giờ thực</label>
+
+                    <!-- Checkbox hiển thị -->
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" id="setShowUnit"> Hiển thị tên đơn vị</label>
+                            <label><input type="checkbox" id="setShowDate"> Hiển thị ngày giờ thực</label>
+                        </div>
                     </div>
-                    <div class="form-group location-setting-card">
-                        <label class="location-card-title"><i class="fa-solid fa-location-dot"></i> Vị trí GPS & Địa phương</label>
+
+                    <!-- Vị trí GPS -->
+                    <div class="location-setting-card">
+                        <div class="location-card-title"><i class="fa-solid fa-location-dot"></i> Vị trí GPS &amp; Địa phương</div>
                         <div class="checkbox-group mt-1">
                             <label><input type="checkbox" id="setShowLocation"> Ghi địa phương GPS vào media</label>
                         </div>
                         <div id="locationStatusDisplay" class="location-status-text">📍 Vị trí chưa cập nhật</div>
                         <p class="setting-desc-text">Tự động chuyển tọa độ GPS thành tên Xã/Phường, Huyện/Quận, Tỉnh/TP trên watermark.</p>
                     </div>
+
+                    <!-- Vị trí watermark -->
                     <div class="form-group">
                         <label for="setPosition">Vị trí Watermark:</label>
                         <select id="setPosition" class="form-control">
@@ -194,6 +1336,8 @@
                             <option value="bottom-right">Góc phải dưới (Chuẩn)</option>
                         </select>
                     </div>
+
+                    <!-- Căn chỉnh chữ -->
                     <div class="form-group">
                         <label for="setAlign">Căn chỉnh chữ:</label>
                         <select id="setAlign" class="form-control">
@@ -202,22 +1346,35 @@
                             <option value="right">Căn phải</option>
                         </select>
                     </div>
+
+                    <!-- Cỡ chữ -->
                     <div class="form-group">
                         <label for="setFontSize">Cỡ chữ cơ sở (px - Tự scale theo độ phân giải):</label>
                         <input type="number" id="setFontSize" class="form-control" value="16" min="10" max="100">
                     </div>
+
+                    <!-- Màu chữ -->
                     <div class="form-group">
                         <label for="setColor">Màu chữ:</label>
                         <input type="color" id="setColor" class="form-control color-picker" value="#ff2407">
                     </div>
+
+                    <!-- Màu nền -->
                     <div class="form-group">
                         <label for="setBgColor">Màu nền hộp chữ (transparent hoặc HEX/RGBA):</label>
-                        <input type="text" id="setBgColor" class="form-control" value="transparent">
+                        <input type="text" id="setBgColor" class="form-control" value="transparent" placeholder="transparent, #000000, rgba(0,0,0,0.5)">
                     </div>
-                    <div class="form-group checkbox-group">
-                        <label><input type="checkbox" id="setShadow" checked> Bật bóng đen cho chữ (Nổi bật trên nền sáng)</label>
+
+                    <!-- Bóng đèn -->
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" id="setShadow" checked> Bật bóng đen cho chữ (Nổi bật trên nền sáng)</label>
+                        </div>
                     </div>
-                </div>
+
+                </div><!-- /watermarkSettingsOptions -->
+
+                <!-- Nút lưu -->
                 <button id="btnSaveSettings" class="btn btn-primary w-100 btn-large mt-3">
                     <i class="fa-solid fa-floppy-disk"></i> LƯU CẤU HÌNH (ĐÃ TỰ ĐỘNG LƯU)
                 </button>
@@ -225,6 +1382,7 @@
         </section>
     </main>
 
+    <!-- ===== BOTTOM NAV ===== -->
     <nav class="bottom-nav">
         <button class="nav-btn active" data-target="tab-camera"><i class="fa-solid fa-camera"></i> Camera</button>
         <button class="nav-btn" data-target="tab-list"><i class="fa-solid fa-list-check"></i> Danh sách</button>
@@ -232,8 +1390,10 @@
         <button class="nav-btn" data-target="tab-settings"><i class="fa-solid fa-sliders"></i> Cài đặt</button>
     </nav>
 
+    <!-- ===== TOAST ===== -->
     <div id="toast" class="toast hidden"></div>
 
+    <!-- ===== MODALS ===== -->
     <div id="imageModal" class="modal hidden">
         <span class="modal-close" id="closeImageModal">&times;</span>
         <img id="modalImg" class="modal-content" alt="Preview Image">
@@ -245,6 +1405,1959 @@
         <div id="modalVideoCaption" class="modal-caption"></div>
     </div>
 
-    <script src="script.js"></script>
+    <!-- ===== SCRIPTS ===== -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js">
+    </script>
+
+    <script>
+        /**
+         * MEDIA NAME STUDIO - Core Application Engine
+         * (Refactored Production Architecture)
+         * High Performance, Capability-Detection First, Zero Data-Loss Media Pipeline
+         */
+
+        const SUPABASE_URL = 'https://whuyytjksrpyojmukftp.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_gpW8TcOIz4ocrrMIWUx3Qg_sZaeZqQ0';
+
+        let supabaseClient = null;
+        if (window.supabase) {
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        }
+
+        class AppError extends Error {
+            constructor(category, message, originalError = null) {
+                super(message);
+                this.name = category;
+                this.originalError = originalError;
+            }
+        }
+
+        const Logger = {
+            debugMode: true,
+            camera(...args) { if (this.debugMode) console.log('[Camera]', ...args); },
+            recording(...args) { if (this.debugMode) console.log('[Recording]', ...args); },
+            processing(...args) { if (this.debugMode) console.log('[Processing]', ...args); },
+            storage(...args) { if (this.debugMode) console.log('[Storage]', ...args); },
+            sync(...args) { if (this.debugMode) console.log('[Sync]', ...args); },
+            settings(...args) { if (this.debugMode) console.log('[Settings]', ...args); },
+            error(category, message, err) { console.error(`[${category} Error] ${message}`, err || ''); }
+        };
+
+        const ObjectURLManager = {
+            activeUrls: new Set(),
+            create(blob) {
+                if (!blob) return '';
+                const url = URL.createObjectURL(blob);
+                this.activeUrls.add(url);
+                return url;
+            },
+            revoke(url) {
+                if (url && this.activeUrls.has(url)) {
+                    URL.revokeObjectURL(url);
+                    this.activeUrls.delete(url);
+                }
+            },
+            revokeAll() {
+                this.activeUrls.forEach(url => URL.revokeObjectURL(url));
+                this.activeUrls.clear();
+            }
+        };
+
+        const Utils = {
+            removeVietnameseTones(str) {
+                if (!str) return '';
+                str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
+                str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
+                str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
+                str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+                str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
+                str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+                str = str.replace(/đ/g, "d");
+                str = str.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A");
+                str = str.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E");
+                str = str.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I");
+                str = str.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O");
+                str = str.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U");
+                str = str.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y");
+                str = str.replace(/Đ/g, "D");
+                str = str.replace(/\u0300|\u0301|\u0303|\u0309|\u0323/g, "");
+                str = str.replace(/\u02C6|\u0306|\u031B/g, "");
+                return str.replace(/[^a-zA-Z0-9]/g, "_").replace(/_+/g, "_");
+            },
+
+            formatDateForFile(timestamp) {
+                const d = new Date(timestamp);
+                const pad = n => String(n).padStart(2, '0');
+                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+            },
+
+            showToast(message, duration = 3500) {
+                const toast = document.getElementById('toast');
+                if (!toast) return;
+                toast.textContent = message;
+                toast.classList.remove('hidden');
+                clearTimeout(toast._timer);
+                toast._timer = setTimeout(() => toast.classList.add('hidden'), duration);
+            },
+
+            getBestSupportedVideoMimeType() {
+                if (typeof MediaRecorder === 'undefined') return '';
+                const candidateTypes = [
+                    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+                    'video/mp4',
+                    'video/webm;codecs=h264,opus',
+                    'video/webm;codecs=vp9,opus',
+                    'video/webm;codecs=vp8,opus',
+                    'video/webm'
+                ];
+                for (const type of candidateTypes) {
+                    if (MediaRecorder.isTypeSupported(type)) return type;
+                }
+                return '';
+            },
+
+            getFileExtensionFromMime(mimeType, defaultType = 'photo') {
+                if (defaultType === 'photo') return 'jpg';
+                if (mimeType.includes('mp4')) return 'mp4';
+                if (mimeType.includes('webm')) return 'webm';
+                return 'mp4';
+            },
+
+            checkCapabilities() {
+                const nav = navigator || {};
+                const mediaDevices = nav.mediaDevices || {};
+                return {
+                    hasGetUserMedia: !!(mediaDevices && mediaDevices.getUserMedia),
+                    hasEnumerateDevices: !!(mediaDevices && mediaDevices.enumerateDevices),
+                    hasMediaRecorder: typeof MediaRecorder !== 'undefined',
+                    hasCanvasCaptureStream: !!(HTMLCanvasElement.prototype.captureStream),
+                    hasWebCodecs: typeof VideoEncoder !== 'undefined' && typeof VideoDecoder !== 'undefined',
+                    hasAudioContext: typeof(window.AudioContext || window.webkitAudioContext) !== 'undefined'
+                };
+            }
+        };
+
+        class AppDB {
+            constructor() {
+                this.dbName = 'MediaNameStudioDB';
+                this.version = 5;
+                this.db = null;
+            }
+
+            init() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(this.dbName, this.version);
+                    request.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains('students')) db.createObjectStore('students', { keyPath: 'id' });
+                        if (!db.objectStoreNames.contains('media')) db.createObjectStore('media', { keyPath: 'id' });
+                        if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
+                    };
+                    request.onsuccess = (e) => { this.db = e.target.result;
+                        resolve(); };
+                    request.onerror = (e) => reject(new AppError('StorageError', 'IndexedDB failed to open', e));
+                });
+            }
+
+            async setSetting(key, value) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction('settings', 'readwrite');
+                    tx.objectStore('settings').put({ key, value });
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = (e) => reject(new AppError('StorageError', 'Failed to save setting', e));
+                });
+            }
+
+            async getSetting(key, defaultValue = null) {
+                return new Promise(resolve => {
+                    const tx = this.db.transaction('settings', 'readonly');
+                    const req = tx.objectStore('settings').get(key);
+                    req.onsuccess = () => resolve(req.result ? req.result.value : defaultValue);
+                    req.onerror = () => resolve(defaultValue);
+                });
+            }
+
+            async saveStudents(studentsArray) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction('students', 'readwrite');
+                    const store = tx.objectStore('students');
+                    studentsArray.forEach(s => store.put(s));
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = (e) => reject(new AppError('StorageError', 'Failed to save students', e));
+                });
+            }
+
+            async getStudents() {
+                return new Promise(resolve => {
+                    const tx = this.db.transaction('students', 'readonly');
+                    const req = tx.objectStore('students').getAll();
+                    req.onsuccess = () => resolve(req.result || []);
+                    req.onerror = () => resolve([]);
+                });
+            }
+
+            async clearStudents() {
+                return new Promise(resolve => {
+                    const tx = this.db.transaction('students', 'readwrite');
+                    tx.objectStore('students').clear();
+                    tx.oncomplete = () => resolve();
+                });
+            }
+
+            async saveMedia(mediaObj) {
+                return new Promise((resolve, reject) => {
+                    try {
+                        const tx = this.db.transaction('media', 'readwrite');
+                        tx.objectStore('media').put(mediaObj);
+                        tx.oncomplete = () => resolve();
+                        tx.onerror = (e) => {
+                            if (e.target.error && e.target.error.name === 'QuotaExceededError') {
+                                Utils.showToast("Bộ nhớ thiết bị đã đầy. Vui lòng xóa bớt media!");
+                                reject(new AppError('QuotaError', 'IndexedDB quota exceeded', e.target.error));
+                            } else {
+                                reject(new AppError('StorageError', 'Failed to save media item', e.target.error));
+                            }
+                        };
+                    } catch (err) {
+                        reject(new AppError('StorageError', 'Failed to execute media save', err));
+                    }
+                });
+            }
+
+            async getAllMedia() {
+                return new Promise(resolve => {
+                    const tx = this.db.transaction('media', 'readonly');
+                    const req = tx.objectStore('media').getAll();
+                    req.onsuccess = () => {
+                        const results = req.result || [];
+                        resolve(results.sort((a, b) => b.timestamp - a.timestamp));
+                    };
+                    req.onerror = () => resolve([]);
+                });
+            }
+
+            async getMediaById(id) {
+                return new Promise(resolve => {
+                    const tx = this.db.transaction('media', 'readonly');
+                    const req = tx.objectStore('media').get(id);
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => resolve(null);
+                });
+            }
+
+            async deleteMedia(ids) {
+                return new Promise(resolve => {
+                    const tx = this.db.transaction('media', 'readwrite');
+                    const store = tx.objectStore('media');
+                    ids.forEach(id => store.delete(id));
+                    tx.oncomplete = () => resolve();
+                });
+            }
+        }
+        const db = new AppDB();
+
+        const DEFAULT_SETTINGS = {
+            schemaVersion: 1,
+            enabled: true,
+            unitName: 'TRƯỜNG TH.TQT',
+            showUnit: true,
+            showDate: true,
+            showLocation: false,
+            position: 'bottom-right',
+            align: 'right',
+            fontSize: 16,
+            color: '#ff2407',
+            bgColor: 'transparent',
+            shadow: true
+        };
+
+        const SettingsManager = {
+            currentSettings: { ...DEFAULT_SETTINGS },
+            saveDebounceTimer: null,
+
+            async load() {
+                try {
+                    const saved = await db.getSetting('appSettings', null);
+                    if (saved) {
+                        this.currentSettings = this.migrate({ ...DEFAULT_SETTINGS, ...saved });
+                    } else {
+                        this.currentSettings = { ...DEFAULT_SETTINGS };
+                    }
+                    await this.save(true);
+                    return this.currentSettings;
+                } catch (err) {
+                    Logger.error('Settings', 'Load settings failed, restoring default', err);
+                    this.currentSettings = { ...DEFAULT_SETTINGS };
+                    return this.currentSettings;
+                }
+            },
+
+            migrate(savedSettings) {
+                let version = savedSettings.schemaVersion || 1;
+                if (version === 1) {
+                    savedSettings.schemaVersion = 1;
+                }
+                return { ...DEFAULT_SETTINGS, ...savedSettings };
+            },
+
+            get(key = null) {
+                return key ? this.currentSettings[key] : this.currentSettings;
+            },
+
+            set(key, value) {
+                this.currentSettings[key] = value;
+                this.scheduleSave();
+            },
+
+            async update(partialSettings) {
+                Object.assign(this.currentSettings, partialSettings);
+                this.scheduleSave();
+            },
+
+            scheduleSave() {
+                this.showAutoSaveStatus(false);
+                if (this.saveDebounceTimer) clearTimeout(this.saveDebounceTimer);
+                this.saveDebounceTimer = setTimeout(async () => {
+                    await this.save();
+                }, 400);
+            },
+
+            async save(immediate = false) {
+                if (this.saveDebounceTimer) {
+                    clearTimeout(this.saveDebounceTimer);
+                    this.saveDebounceTimer = null;
+                }
+                try {
+                    await db.setSetting('appSettings', this.currentSettings);
+                    this.showAutoSaveStatus(true);
+                    Logger.settings('Auto-saved settings:', this.currentSettings);
+                } catch (err) {
+                    Logger.error('Settings', 'Save settings failed', err);
+                }
+            },
+
+            async reset() {
+                this.currentSettings = { ...DEFAULT_SETTINGS };
+                await this.save(true);
+                return this.currentSettings;
+            },
+
+            showAutoSaveStatus(saved) {
+                const indicator = document.getElementById('autoSaveIndicator');
+                if (!indicator) return;
+                if (saved) {
+                    indicator.innerHTML = '<i class="fa-solid fa-check"></i> Đã tự động lưu';
+                    indicator.classList.remove('saving');
+                } else {
+                    indicator.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...';
+                    indicator.classList.add('saving');
+                }
+            }
+        };
+
+        const Auth = {
+            currentUser: null,
+            async init() {
+                if (!supabaseClient) return;
+                try {
+                    const { data: { session } } = await supabaseClient.auth.getSession();
+                    this.currentUser = session?.user || null;
+                    this.updateUI();
+                    supabaseClient.auth.onAuthStateChange((event, session) => {
+                        this.currentUser = session?.user || null;
+                        this.updateUI();
+                        if (event === 'SIGNED_IN') SyncManager.syncFromCloud();
+                    });
+                } catch (err) {
+                    Logger.error('Auth', 'Auth init error', err);
+                }
+            },
+            updateUI() {
+                const loginSection = document.getElementById('loginSection');
+                const userInfo = document.getElementById('userInfo');
+                const userEmail = document.getElementById('userEmail');
+                if (this.currentUser) {
+                    if (loginSection) loginSection.style.display = 'none';
+                    if (userInfo) userInfo.style.display = 'flex';
+                    if (userEmail) userEmail.textContent = this.currentUser.email;
+                } else {
+                    if (loginSection) loginSection.style.display = 'block';
+                    if (userInfo) userInfo.style.display = 'none';
+                }
+            },
+            async signInWithGoogle() {
+                if (!supabaseClient) { Utils.showToast("Chưa cấu hình Supabase!"); return; }
+                const { error } = await supabaseClient.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: { redirectTo: window.location.origin + window.location.pathname }
+                });
+                if (error) Utils.showToast('Lỗi đăng nhập: ' + error.message);
+            },
+            async signOut() {
+                if (!supabaseClient) return;
+                await supabaseClient.auth.signOut();
+                this.currentUser = null;
+                this.updateUI();
+                Utils.showToast('Đã đăng xuất!');
+            }
+        };
+
+        const SyncManager = {
+            isSyncing: false,
+            async uploadSingleMedia(mediaObj) {
+                if (!Auth.currentUser || !supabaseClient || mediaObj.sync_status === 'synced') return;
+
+                if (SettingsManager.get('enabled') && mediaObj.processingStatus === 'failed') {
+                    Logger.sync('Bỏ qua upload vì watermark xử lý thất bại');
+                    return;
+                }
+
+                try {
+                    const userId = Auth.currentUser.id;
+                    const cleanStudent = Utils.removeVietnameseTones(mediaObj.studentName || 'student');
+                    const targetBlob = mediaObj.processedBlob || mediaObj.originalBlob || mediaObj.blob;
+                    if (!targetBlob) return;
+
+                    const filePath = `${userId}/${cleanStudent}/${mediaObj.fileName}`;
+                    const fileToUpload = new File([targetBlob], mediaObj.fileName, { type: targetBlob.type });
+
+                    const { error: uploadError } = await supabaseClient.storage.from('media').upload(filePath, fileToUpload,
+                    { upsert: true });
+                    if (uploadError) throw uploadError;
+
+                    const { data: { publicUrl } } = supabaseClient.storage.from('media').getPublicUrl(filePath);
+
+                    const { error: dbError } = await supabaseClient.from('media_files').upsert([{
+                        user_id: userId,
+                        student_name: mediaObj.studentName,
+                        file_name: mediaObj.fileName,
+                        file_url: publicUrl,
+                        file_type: mediaObj.type,
+                        file_path: filePath,
+                        created_at: new Date(mediaObj.timestamp).toISOString()
+                    }], { onConflict: 'file_path' });
+
+                    if (dbError) throw dbError;
+
+                    mediaObj.sync_status = 'synced';
+                    mediaObj.file_path = filePath;
+                    await db.saveMedia(mediaObj);
+                    if (App.activeTab === 'tab-gallery') App.loadGallery();
+                } catch (err) {
+                    Logger.error('Sync', 'Upload media failed', err);
+                    mediaObj.sync_status = 'failed';
+                    await db.saveMedia(mediaObj);
+                }
+            },
+
+            async syncFromCloud() {
+                if (!Auth.currentUser || !supabaseClient || this.isSyncing) return;
+                this.isSyncing = true;
+                try {
+                    const { data: cloudFiles, error } = await supabaseClient.from('media_files')
+                        .select('*')
+                        .eq('user_id', Auth.currentUser.id)
+                        .order('created_at', { ascending: false });
+                    if (error) throw error;
+
+                    if (cloudFiles && cloudFiles.length > 0) {
+                        const localMedia = await db.getAllMedia();
+                        const localMap = new Map(localMedia.map(m => [m.fileName, m]));
+
+                        for (const file of cloudFiles) {
+                            if (!localMap.has(file.file_name)) {
+                                try {
+                                    const res = await fetch(file.file_url);
+                                    const blob = await res.blob();
+                                    const mediaObj = {
+                                        id: new Date(file.created_at).getTime().toString(),
+                                        type: file.file_type,
+                                        blob: blob,
+                                        originalBlob: blob,
+                                        processedBlob: blob,
+                                        studentName: file.student_name || 'Học sinh',
+                                        fileName: file.file_name,
+                                        timestamp: new Date(file.created_at).getTime(),
+                                        watermarkApplied: true,
+                                        processingStatus: 'success',
+                                        sync_status: 'synced',
+                                        file_path: file.file_path
+                                    };
+                                    await db.saveMedia(mediaObj);
+                                } catch (e) {
+                                    Logger.error('Sync', "Fetch cloud file failed:", file.file_name);
+                                }
+                            }
+                        }
+                        if (App.activeTab === 'tab-gallery') App.loadGallery();
+                    }
+                } catch (err) {
+                    Logger.error('Sync', 'Sync from cloud error', err);
+                } finally {
+                    this.isSyncing = false;
+                }
+            }
+        };
+
+        const LocationService = {
+            cache: { lat: null, lon: null, formattedName: null, timestamp: 0 },
+            isFetchingAddress: false,
+
+            calculateDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371000;
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLon = (lon2 - lon1) * Math.PI / 180;
+                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            },
+
+            formatVietnamLocation(address) {
+                if (!address) return null;
+                let ward = address.ward || address.suburb || address.quarter || address.village || address.commune || address
+                    .hamlet;
+                let district = address.city_district || address.district || address.county || address.town;
+                let province = address.city || address.state || address.province;
+
+                const parts = [];
+                if (ward) {
+                    ward = ward.trim();
+                    if (/^(phường|p\.)\s+/i.test(ward)) ward = ward.replace(/^(phường|p\.)\s+/i, 'P. ');
+                    else if (/^(xã|x\.)\s+/i.test(ward)) ward = ward.replace(/^(xã|x\.)\s+/i, 'Xã ');
+                    else if (/^(thị trấn|tt\.)\s+/i.test(ward)) ward = ward.replace(/^(thị trấn|tt\.)\s+/i, 'TT. ');
+                    parts.push(ward);
+                }
+                if (district) {
+                    district = district.trim();
+                    if (/^(quận|q\.)\s+/i.test(district)) district = district.replace(/^(quận|q\.)\s+/i, 'Q. ');
+                    else if (/^(huyện|h\.)\s+/i.test(district)) district = district.replace(/^(huyện|h\.)\s+/i, 'Huyện ');
+                    else if (/^(thị xã|tx\.)\s+/i.test(district)) district = district.replace(/^(thị xã|tx\.)\s+/i,
+                    'TX. ');
+                    else if (/^(thành phố|tp\.)\s+/i.test(district)) district = district.replace(
+                    /^(thành phố|tp\.)\s+/i, 'TP. ');
+                    parts.push(district);
+                }
+                if (province) {
+                    province = province.trim();
+                    if (/^(thành phố|tp\.)\s+/i.test(province)) province = province.replace(/^(thành phố|tp\.)\s+/i,
+                        'TP. ');
+                    else if (/^(tỉnh)\s+/i.test(province)) province = province.replace(/^(tỉnh)\s+/i, 'Tỉnh ');
+                    parts.push(province);
+                }
+                return parts.length > 0 ? parts.join(', ') : null;
+            },
+
+            async reverseGeocode(lat, lon) {
+                try {
+                    const url =
+                        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=vi`;
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+                    const response = await fetch(url, { signal: controller.signal, headers: { 'Accept-Language': 'vi' } });
+                    clearTimeout(timeoutId);
+
+                    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+                    const data = await response.json();
+
+                    if (data && data.address) {
+                        const countryCode = (data.address.country_code || '').toLowerCase();
+                        if (countryCode === 'vn') {
+                            const vnFormatted = this.formatVietnamLocation(data.address);
+                            if (vnFormatted) return vnFormatted;
+                        }
+                        return data.display_name || null;
+                    }
+                } catch (err) {
+                    Logger.error('Location', 'Reverse Geocode error', err);
+                }
+                return null;
+            },
+
+            getLocationDisplayString() {
+                if (this.cache.lat === null || this.cache.lon === null) return null;
+                if (this.cache.formattedName) return `📍 ${this.cache.formattedName}`;
+                return `📍 GPS: ${this.cache.lat}, ${this.cache.lon}`;
+            },
+
+            async updateLocation(forceRefresh = false) {
+                if (!navigator.geolocation) return null;
+                return new Promise((resolve) => {
+                    navigator.geolocation.getCurrentPosition(
+                        async (position) => {
+                            const lat = Number(position.coords.latitude.toFixed(6));
+                            const lon = Number(position.coords.longitude.toFixed(6));
+                            const now = Date.now();
+
+                            const isDistClose = this.cache.lat !== null && this.calculateDistance(lat, lon, this
+                                .cache.lat, this.cache.lon) < 150;
+                            const isCacheFresh = (now - this.cache.timestamp) < 600000;
+
+                            this.cache.lat = lat;
+                            this.cache.lon = lon;
+
+                            if (isDistClose && isCacheFresh && this.cache.formattedName && !forceRefresh) {
+                                this.updateUIStatus();
+                                resolve(this.getLocationDisplayString());
+                                return;
+                            }
+
+                            this.updateUIStatus();
+                            if (!this.isFetchingAddress) {
+                                this.isFetchingAddress = true;
+                                this.reverseGeocode(lat, lon).then((name) => {
+                                    this.cache.formattedName = name;
+                                    this.cache.timestamp = Date.now();
+                                    this.isFetchingAddress = false;
+                                    this.updateUIStatus();
+                                }).catch(() => { this.isFetchingAddress = false; });
+                            }
+                            resolve(this.getLocationDisplayString());
+                        },
+                        (error) => {
+                            Logger.error('Location', 'GPS Geolocation error', error);
+                            this.updateUIStatus();
+                            resolve(null);
+                        }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 }
+                    );
+                });
+            },
+
+            updateUIStatus() {
+                const statusEl = document.getElementById('locationStatusDisplay');
+                if (statusEl) {
+                    if (this.cache.formattedName) {
+                        statusEl.textContent = `📍 ${this.cache.formattedName}`;
+                        statusEl.style.color = '#28a745';
+                    } else if (this.cache.lat !== null) {
+                        statusEl.textContent = `📍 GPS: ${this.cache.lat}, ${this.cache.lon}`;
+                        statusEl.style.color = '#ffc107';
+                    } else {
+                        statusEl.textContent = '📍 Chưa xác định được vị trí';
+                        statusEl.style.color = '#aaa';
+                    }
+                }
+            }
+        };
+
+        const WatermarkEngine = {
+            drawToCanvas(canvas, studentName, settings, locationText = null) {
+                if (!settings || !settings.enabled) return;
+
+                const ctx = canvas.getContext('2d');
+                const lines = [];
+
+                if (settings.showUnit && settings.unitName) {
+                    lines.push(settings.unitName.toUpperCase());
+                }
+                if (studentName) {
+                    lines.push(`HỌ TÊN: ${studentName.toUpperCase()}`);
+                }
+                if (settings.showDate) {
+                    const now = new Date();
+                    const pad = n => String(n).padStart(2, '0');
+                    lines.push(
+                        `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+                        );
+                }
+                if (settings.showLocation && locationText) {
+                    lines.push(locationText);
+                }
+
+                if (lines.length === 0) return;
+
+                const baseFontSize = parseInt(settings.fontSize) || 16;
+                const scaleFactor = Math.max(canvas.width / 1280, 0.6);
+                const fontSize = Math.round(baseFontSize * scaleFactor);
+
+                ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+
+                const lineHeight = fontSize * 1.35;
+                let maxWidth = 0;
+                lines.forEach(l => {
+                    const w = ctx.measureText(l).width;
+                    if (w > maxWidth) maxWidth = w;
+                });
+
+                const padding = Math.round(10 * scaleFactor);
+                const bWidth = maxWidth + (padding * 2);
+                const bHeight = (lines.length * lineHeight) + padding;
+
+                let boxX = padding;
+                let boxY = padding;
+
+                if (settings.position === 'bottom-right') {
+                    boxX = canvas.width - bWidth - padding;
+                    boxY = canvas.height - bHeight - padding;
+                } else if (settings.position === 'bottom') {
+                    boxX = (canvas.width - bWidth) / 2;
+                    boxY = canvas.height - bHeight - padding;
+                } else if (settings.position === 'center') {
+                    boxX = (canvas.width - bWidth) / 2;
+                    boxY = (canvas.height - bHeight) / 2;
+                } else if (settings.position === 'top') {
+                    boxX = (canvas.width - bWidth) / 2;
+                    boxY = padding;
+                }
+
+                if (settings.bgColor && settings.bgColor.trim() !== 'transparent') {
+                    ctx.fillStyle = settings.bgColor;
+                    ctx.fillRect(boxX, boxY, bWidth, bHeight);
+                }
+
+                if (settings.shadow) {
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+                    ctx.shadowBlur = Math.round(4 * scaleFactor);
+                    ctx.shadowOffsetX = Math.round(2 * scaleFactor);
+                    ctx.shadowOffsetY = Math.round(2 * scaleFactor);
+                } else {
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowBlur = 0;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                }
+
+                ctx.fillStyle = settings.color || '#ff2407';
+                ctx.textBaseline = 'top';
+
+                lines.forEach((line, i) => {
+                    let textX = boxX + padding;
+                    ctx.textAlign = 'left';
+
+                    if (settings.align === 'center') {
+                        textX = boxX + (bWidth / 2);
+                        ctx.textAlign = 'center';
+                    } else if (settings.align === 'right') {
+                        textX = boxX + bWidth - padding;
+                        ctx.textAlign = 'right';
+                    }
+                    ctx.fillText(line, textX, boxY + (padding / 2) + (i * lineHeight));
+                });
+
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+            }
+        };
+
+        const VideoProcessingEngine = {
+            currentJobCancel: null,
+
+            showProgress(percent, title = "Đang xử lý Watermark Video...") {
+                const overlay = document.getElementById('processingOverlay');
+                const progressBar = document.getElementById('processingProgressBar');
+                const percentageText = document.getElementById('processingPercentage');
+                const titleEl = document.getElementById('processingTitle');
+
+                if (overlay) overlay.classList.remove('hidden');
+                if (progressBar) progressBar.style.width = `${percent}%`;
+                if (percentageText) percentageText.textContent = `${percent}%`;
+                if (titleEl) titleEl.textContent = title;
+            },
+
+            hideProgress() {
+                const overlay = document.getElementById('processingOverlay');
+                if (overlay) overlay.classList.add('hidden');
+            },
+
+            async processOfflineVideoWatermark(originalVideoBlob, studentName, settings, onProgress) {
+                return new Promise((resolve, reject) => {
+                    let isCancelled = false;
+                    this.currentJobCancel = () => { isCancelled = true; };
+
+                    const video = document.createElement('video');
+                    video.muted = false;
+                    video.playsInline = true;
+                    video.preload = 'auto';
+
+                    const videoUrl = ObjectURLManager.create(originalVideoBlob);
+                    video.src = videoUrl;
+
+                    let audioContext = null;
+                    let audioSource = null;
+                    let audioDestination = null;
+
+                    video.onloadedmetadata = async () => {
+                        try {
+                            const duration = video.duration;
+                            if (!duration || isNaN(duration) || duration <= 0) {
+                                ObjectURLManager.revoke(videoUrl);
+                                return reject(new AppError('ProcessingError', 'Thời lượng video không hợp lệ'));
+                            }
+
+                            const width = video.videoWidth || 1280;
+                            const height = video.videoHeight || 720;
+
+                            const canvas = document.createElement('canvas');
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d', { alpha: false });
+
+                            const mimeType = Utils.getBestSupportedVideoMimeType();
+                            if (!mimeType) {
+                                ObjectURLManager.revoke(videoUrl);
+                                return reject(new AppError('RecordingError',
+                                    'Trình duyệt không hỗ trợ MediaRecorder video'));
+                            }
+
+                            const canvasStream = canvas.captureStream(30);
+
+                            try {
+                                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                                if (AudioCtx) {
+                                    audioContext = new AudioCtx();
+                                    audioSource = audioContext.createMediaElementSource(video);
+                                    audioDestination = audioContext.createMediaStreamDestination();
+                                    audioSource.connect(audioDestination);
+                                    audioSource.connect(audioContext.destination);
+
+                                    const audioTrack = audioDestination.stream.getAudioTracks()[0];
+                                    if (audioTrack) {
+                                        canvasStream.addTrack(audioTrack);
+                                    }
+                                }
+                            } catch (audioErr) {
+                                Logger.error('Processing', 'Khởi tạo luồng âm thanh thất bại:', audioErr);
+                            }
+
+                            const mediaRecorder = new MediaRecorder(canvasStream, {
+                                mimeType,
+                                videoBitsPerSecond: 2500000
+                            });
+
+                            const chunks = [];
+                            mediaRecorder.ondataavailable = e => {
+                                if (e.data && e.data.size > 0) chunks.push(e.data);
+                            };
+
+                            mediaRecorder.onstop = () => {
+                                cleanup();
+                                if (isCancelled) {
+                                    reject(new AppError('ProcessingError', 'Đã hủy xử lý video'));
+                                    return;
+                                }
+                                const processedBlob = new Blob(chunks, { type: mimeType });
+                                if (processedBlob.size === 0) {
+                                    reject(new AppError('ProcessingError', 'Video xuất ra có kích thước 0 byte'));
+                                } else {
+                                    resolve(processedBlob);
+                                }
+                            };
+
+                            const cleanup = () => {
+                                try {
+                                    video.pause();
+                                    ObjectURLManager.revoke(videoUrl);
+                                    if (audioContext && audioContext.state !== 'closed') {
+                                        audioContext.close();
+                                    }
+                                } catch (e) { /* ignore */ }
+                            };
+
+                            let locText = null;
+                            if (settings.showLocation) {
+                                locText = LocationService.getLocationDisplayString();
+                            }
+
+                            mediaRecorder.start();
+                            await video.play();
+
+                            const renderFrame = () => {
+                                if (isCancelled) {
+                                    mediaRecorder.stop();
+                                    return;
+                                }
+
+                                if (video.ended || video.currentTime >= duration) {
+                                    if (mediaRecorder.state !== 'inactive') {
+                                        mediaRecorder.stop();
+                                    }
+                                    return;
+                                }
+
+                                ctx.drawImage(video, 0, 0, width, height);
+                                WatermarkEngine.drawToCanvas(canvas, studentName, settings, locText);
+
+                                const pct = Math.min(Math.round((video.currentTime / duration) * 100), 99);
+                                if (onProgress) onProgress(pct);
+
+                                if ('requestVideoFrameCallback' in video) {
+                                    video.requestVideoFrameCallback(renderFrame);
+                                } else {
+                                    setTimeout(renderFrame, 1000 / 30);
+                                }
+                            };
+
+                            if ('requestVideoFrameCallback' in video) {
+                                video.requestVideoFrameCallback(renderFrame);
+                            } else {
+                                renderFrame();
+                            }
+
+                        } catch (err) {
+                            ObjectURLManager.revoke(videoUrl);
+                            reject(new AppError('ProcessingError', 'Lỗi xử lý khung hình video', err));
+                        }
+                    };
+
+                    video.onerror = (err) => {
+                        ObjectURLManager.revoke(videoUrl);
+                        reject(new AppError('ProcessingError', 'Không thể đọc tệp video gốc', err));
+                    };
+                });
+            }
+        };
+
+        const MediaPipeline = {
+            async createMediaEntry(originalBlob, type, studentName, settings) {
+                const timestamp = Date.now();
+                const cleanName = Utils.removeVietnameseTones(studentName);
+                const mimeType = originalBlob.type || (type === 'photo' ? 'image/jpeg' : Utils
+                .getBestSupportedVideoMimeType());
+                const ext = Utils.getFileExtensionFromMime(mimeType, type);
+                const fileName = `${cleanName}_${Utils.formatDateForFile(timestamp)}.${ext}`;
+
+                const mediaEntry = {
+                    id: timestamp.toString(),
+                    type,
+                    blob: originalBlob,
+                    originalBlob: originalBlob,
+                    processedBlob: null,
+                    studentName,
+                    fileName,
+                    originalFileName: fileName,
+                    timestamp,
+                    mimeType,
+                    watermarkApplied: false,
+                    processingStatus: settings.enabled ? 'pending' : 'success',
+                    sync_status: 'pending',
+                    error: null
+                };
+
+                if (!settings.enabled) {
+                    mediaEntry.processedBlob = originalBlob;
+                    mediaEntry.watermarkApplied = false;
+                }
+
+                await db.saveMedia(mediaEntry);
+                return mediaEntry;
+            },
+
+            async processAndSave(mediaEntry, settings) {
+                if (!settings.enabled) {
+                    mediaEntry.processingStatus = 'success';
+                    mediaEntry.watermarkApplied = false;
+                    await db.saveMedia(mediaEntry);
+                    if (Auth.currentUser) SyncManager.uploadSingleMedia(mediaEntry);
+                    return mediaEntry;
+                }
+
+                VideoProcessingEngine.showProgress(0, `Đang xử lý ${mediaEntry.type === 'photo' ? 'ảnh' : 'video'}...`);
+
+                try {
+                    if (mediaEntry.type === 'photo') {
+                        const processedBlob = await this.applyWatermarkToPhotoBlob(mediaEntry.originalBlob, mediaEntry
+                            .studentName, settings);
+                        mediaEntry.processedBlob = processedBlob;
+                        mediaEntry.blob = processedBlob;
+                        mediaEntry.watermarkApplied = true;
+                        mediaEntry.processingStatus = 'success';
+                        VideoProcessingEngine.showProgress(100);
+                    } else {
+                        const processedBlob = await VideoProcessingEngine.processOfflineVideoWatermark(
+                            mediaEntry.originalBlob,
+                            mediaEntry.studentName,
+                            settings,
+                            (percent) => VideoProcessingEngine.showProgress(percent)
+                        );
+                        mediaEntry.processedBlob = processedBlob;
+                        mediaEntry.blob = processedBlob;
+                        mediaEntry.watermarkApplied = true;
+                        mediaEntry.processingStatus = 'success';
+                    }
+
+                    await db.saveMedia(mediaEntry);
+                    Utils.showToast(`✅ Đã đóng watermark: ${mediaEntry.studentName}`);
+
+                    if (Auth.currentUser) {
+                        SyncManager.uploadSingleMedia(mediaEntry);
+                    }
+
+                } catch (err) {
+                    Logger.error('Pipeline', 'Xử lý media thất bại', err);
+                    mediaEntry.processingStatus = 'failed';
+                    mediaEntry.error = err.message || 'Lỗi xử lý watermark';
+                    await db.saveMedia(mediaEntry);
+
+                    Utils.showToast(`❌ Lỗi watermark! Video gốc vẫn an toàn. Có thể nhấn Thử lại trong Thư viện.`);
+                } finally {
+                    setTimeout(() => VideoProcessingEngine.hideProgress(), 500);
+                    if (App.activeTab === 'tab-gallery') App.loadGallery();
+                }
+
+                return mediaEntry;
+            },
+
+            async applyWatermarkToPhotoBlob(photoBlob, studentName, settings) {
+                let locationText = null;
+                if (settings.showLocation) {
+                    locationText = LocationService.getLocationDisplayString();
+                }
+
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    const url = ObjectURLManager.create(photoBlob);
+                    img.onload = () => {
+                        try {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0);
+
+                            WatermarkEngine.drawToCanvas(canvas, studentName, settings, locationText);
+
+                            canvas.toBlob((blob) => {
+                                ObjectURLManager.revoke(url);
+                                if (blob) resolve(blob);
+                                else reject(new AppError('WatermarkError', 'Không thể tạo Blob ảnh'));
+                            }, 'image/jpeg', 0.92);
+                        } catch (e) {
+                            ObjectURLManager.revoke(url);
+                            reject(e);
+                        }
+                    };
+                    img.onerror = () => {
+                        ObjectURLManager.revoke(url);
+                        reject(new AppError('WatermarkError', 'Không thể tải ảnh gốc'));
+                    };
+                    img.src = url;
+                });
+            }
+        };
+
+        class CaptureManager {
+            constructor() {
+                this.capabilities = Utils.checkCapabilities();
+                this.stream = null;
+                this.videoTrack = null;
+                this.mediaRecorder = null;
+                this.recordedChunks = [];
+                this.isRecording = false;
+                this.recordStartTime = 0;
+                this.recordTimer = null;
+                this.animationFrameId = null;
+                this.isCameraReady = false;
+                this.currentDeviceId = '';
+                this.recordingStudent = null;
+                this.recordingSettings = null;
+                this.torchActive = false;
+            }
+
+            initUI() {
+                const desktopZone = document.getElementById('desktopCameraZone');
+                const mobileZone = document.getElementById('mobileCameraZone');
+                const controlsPanel = document.getElementById('cameraControlsPanel');
+
+                if (!this.capabilities.hasGetUserMedia) {
+                    if (desktopZone) desktopZone.style.display = 'none';
+                    if (mobileZone) mobileZone.classList.remove('hidden');
+                    if (controlsPanel) controlsPanel.classList.add('hidden');
+                } else {
+                    if (desktopZone) desktopZone.style.display = 'flex';
+                    if (mobileZone) mobileZone.classList.add('hidden');
+                    if (controlsPanel) controlsPanel.classList.remove('hidden');
+                }
+            }
+
+            async startCamera(deviceId = '') {
+                if (!this.capabilities.hasGetUserMedia) return;
+
+                this.stopCamera();
+
+                const video = document.getElementById('rawVideo');
+                try {
+                    const constraints = {
+                        video: deviceId ? { deviceId: { exact: deviceId } } : {
+                            facingMode: { ideal: 'environment' },
+                            width: { ideal: 1920 },
+                            height: { ideal: 1080 }
+                        },
+                        audio: true
+                    };
+
+                    this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    this.videoTrack = this.stream.getVideoTracks()[0] || null;
+                    video.srcObject = this.stream;
+                    this.isCameraReady = false;
+
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        this.isCameraReady = true;
+                        this.startCanvasLoop();
+                        this.inspectTrackCapabilities();
+                    };
+
+                    this.enumerateCameras();
+                    this.applyFilters();
+
+                } catch (err) {
+                    Logger.error('Camera', 'startCamera error', err);
+                    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                        Utils.showToast("Không có quyền truy cập Camera/Microphone.");
+                    } else {
+                        Utils.showToast("Lỗi mở Camera. Chuyển sang Native Camera Mode.");
+                        this.capabilities.hasGetUserMedia = false;
+                        this.initUI();
+                    }
+                }
+            }
+
+            stopCamera() {
+                if (this.isRecording) this.stopRecording();
+                if (this.stream) {
+                    this.stream.getTracks().forEach(t => t.stop());
+                    this.stream = null;
+                    this.videoTrack = null;
+                }
+                if (this.animationFrameId) {
+                    cancelAnimationFrame(this.animationFrameId);
+                    this.animationFrameId = null;
+                }
+                this.isCameraReady = false;
+                const video = document.getElementById('rawVideo');
+                if (video) video.srcObject = null;
+            }
+
+            inspectTrackCapabilities() {
+                if (!this.videoTrack || typeof this.videoTrack.getCapabilities !== 'function') return;
+
+                try {
+                    const caps = this.videoTrack.getCapabilities();
+                    Logger.camera('Hardware Track Capabilities:', caps);
+
+                    const torchBtn = document.getElementById('btnTorchToggle');
+                    if (torchBtn) {
+                        if (caps.torch) {
+                            torchBtn.classList.remove('hidden');
+                        } else {
+                            torchBtn.classList.add('hidden');
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+            }
+
+            async toggleTorch() {
+                if (!this.videoTrack || typeof this.videoTrack.applyConstraints !== 'function') return;
+                try {
+                    const caps = this.videoTrack.getCapabilities ? this.videoTrack.getCapabilities() : {};
+                    if (!caps.torch) return;
+
+                    this.torchActive = !this.torchActive;
+                    await this.videoTrack.applyConstraints({
+                        advanced: [{ torch: this.torchActive }]
+                    });
+
+                    const torchBtn = document.getElementById('btnTorchToggle');
+                    if (torchBtn) {
+                        torchBtn.style.color = this.torchActive ? '#ffeb3b' : '#ffffff';
+                    }
+                } catch (err) {
+                    Logger.error('Camera', 'Bật tắt Flash thất bại', err);
+                }
+            }
+
+            async applyHardwareZoom(zoomVal) {
+                if (!this.videoTrack || typeof this.videoTrack.applyConstraints !== 'function') return false;
+                try {
+                    const caps = this.videoTrack.getCapabilities ? this.videoTrack.getCapabilities() : {};
+                    if (caps.zoom) {
+                        const min = caps.zoom.min || 1;
+                        const max = caps.zoom.max || 3;
+                        const targetZoom = Math.min(Math.max(zoomVal, min), max);
+                        await this.videoTrack.applyConstraints({ advanced: [{ zoom: targetZoom }] });
+                        return true;
+                    }
+                } catch (e) { /* fallback */ }
+                return false;
+            }
+
+            startCanvasLoop() {
+                const video = document.getElementById('rawVideo');
+                const canvas = document.getElementById('outputCanvas');
+                if (!canvas || !video) return;
+
+                const ctx = canvas.getContext('2d', { alpha: false });
+
+                const render = () => {
+                    if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+                        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                        }
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                        if (this.isRecording && this.recordingStudent && this.recordingSettings && this.recordingSettings
+                            .enabled) {
+                            let locText = null;
+                            if (this.recordingSettings.showLocation) {
+                                locText = LocationService.getLocationDisplayString();
+                            }
+                            WatermarkEngine.drawToCanvas(canvas, this.recordingStudent, this.recordingSettings, locText);
+                        }
+                    }
+                    if (this.stream) {
+                        this.animationFrameId = requestAnimationFrame(render);
+                    }
+                };
+                render();
+            }
+
+            async applyFilters() {
+                const zoom = parseFloat(document.getElementById('zoomRange')?.value) || 1;
+                const bright = parseFloat(document.getElementById('brightnessRange')?.value) || 1;
+                const canvas = document.getElementById('outputCanvas');
+
+                const hardwareApplied = await this.applyHardwareZoom(zoom);
+
+                if (canvas) {
+                    canvas.style.transform = hardwareApplied ? 'none' : `scale(${zoom})`;
+                    canvas.style.filter = bright !== 1 ? `brightness(${bright})` : 'none';
+                }
+            }
+
+            async capturePhoto(studentName, settings) {
+                if (!this.isCameraReady) throw new AppError('CameraError', 'Camera chưa sẵn sàng');
+
+                const canvas = document.getElementById('outputCanvas');
+                if (!canvas || canvas.width === 0) throw new AppError('CameraError', 'Khung hình rỗng');
+
+                let locationText = null;
+                if (settings.showLocation) {
+                    locationText = LocationService.getLocationDisplayString();
+                }
+
+                const captureCanvas = document.createElement('canvas');
+                captureCanvas.width = canvas.width;
+                captureCanvas.height = canvas.height;
+                const ctx = captureCanvas.getContext('2d');
+
+                const brightness = parseFloat(document.getElementById('brightnessRange')?.value) || 1;
+                const zoom = parseFloat(document.getElementById('zoomRange')?.value) || 1;
+
+                ctx.save();
+                if (brightness !== 1) ctx.filter = `brightness(${brightness})`;
+                if (zoom !== 1) {
+                    const cx = captureCanvas.width / 2;
+                    const cy = captureCanvas.height / 2;
+                    ctx.translate(cx, cy);
+                    ctx.scale(zoom, zoom);
+                    ctx.translate(-cx, -cy);
+                }
+                ctx.drawImage(canvas, 0, 0, captureCanvas.width, captureCanvas.height);
+                ctx.restore();
+
+                WatermarkEngine.drawToCanvas(captureCanvas, studentName, settings, locationText);
+
+                return new Promise(resolve => captureCanvas.toBlob(resolve, 'image/jpeg', 0.92));
+            }
+
+            startRecording(studentName, settings) {
+                if (this.isRecording) return;
+                if (!this.isCameraReady) { Utils.showToast("Camera chưa sẵn sàng!"); return; }
+
+                const canvas = document.getElementById('outputCanvas');
+                if (!canvas || canvas.width === 0) return;
+
+                this.recordingStudent = studentName;
+                this.recordingSettings = settings;
+
+                try {
+                    const canvasStream = canvas.captureStream(30);
+                    const audioTracks = this.stream ? this.stream.getAudioTracks() : [];
+                    const combinedStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+
+                    const mimeType = Utils.getBestSupportedVideoMimeType();
+                    if (!mimeType) { Utils.showToast("Trình duyệt không hỗ trợ quay video!"); return; }
+
+                    this.mediaRecorder = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 2500000 });
+                    this.recordedChunks = [];
+
+                    this.mediaRecorder.ondataavailable = e => {
+                        if (e.data && e.data.size > 0) this.recordedChunks.push(e.data);
+                    };
+
+                    this.mediaRecorder.onstop = async () => {
+                        const blob = new Blob(this.recordedChunks, { type: mimeType });
+                        if (blob.size > 0) {
+                            const entry = await MediaPipeline.createMediaEntry(blob, 'video', studentName, { enabled: false });
+                            entry.processedBlob = blob;
+                            entry.watermarkApplied = settings.enabled;
+                            entry.processingStatus = 'success';
+                            await db.saveMedia(entry);
+                            Utils.showToast(`Đã lưu video: ${studentName}`);
+                            if (Auth.currentUser) SyncManager.uploadSingleMedia(entry);
+                            if (App.activeTab === 'tab-gallery') App.loadGallery();
+                        }
+                        this.recordedChunks = [];
+                        this.recordingStudent = null;
+                        this.recordingSettings = null;
+                    };
+
+                    this.mediaRecorder.start();
+                    this.isRecording = true;
+                    this.recordStartTime = Date.now();
+
+                    const btn = document.getElementById('btnRecordVideo');
+                    if (btn) btn.innerHTML = '<i class="fa-solid fa-square"></i><span class="btn-label">DỪNG</span>';
+                    document.getElementById('recordingIndicator').classList.remove('hidden');
+
+                    this.recordTimer = setInterval(() => {
+                        const d = Math.floor((Date.now() - this.recordStartTime) / 1000);
+                        document.getElementById('recordingTime').textContent =
+                            `${String(Math.floor(d / 60)).padStart(2, '0')}:${String(d % 60).padStart(2, '0')}`;
+                    }, 1000);
+
+                } catch (err) {
+                    Logger.error('Recording', 'Bắt đầu quay video thất bại', err);
+                    Utils.showToast("Lỗi khởi tạo quay video!");
+                }
+            }
+
+            stopRecording() {
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                    this.mediaRecorder.stop();
+                }
+                this.isRecording = false;
+                clearInterval(this.recordTimer);
+
+                const btn = document.getElementById('btnRecordVideo');
+                if (btn) btn.innerHTML = '<i class="fa-solid fa-video"></i><span class="btn-label">QUAY VIDEO</span>';
+                document.getElementById('recordingIndicator')?.classList.add('hidden');
+                document.getElementById('recordingTime').textContent = '00:00';
+            }
+
+            async enumerateCameras() {
+                if (!this.capabilities.hasEnumerateDevices) return;
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                    const selector = document.getElementById('cameraSelect');
+                    if (!selector) return;
+
+                    const currentValue = selector.value;
+                    selector.innerHTML = '<option value="">-- Camera --</option>';
+                    videoDevices.forEach((d, i) => {
+                        const opt = document.createElement('option');
+                        opt.value = d.deviceId;
+                        opt.text = d.label || `Camera ${i + 1}`;
+                        selector.appendChild(opt);
+                    });
+
+                    if (currentValue && [...selector.options].some(o => o.value === currentValue)) {
+                        selector.value = currentValue;
+                    }
+
+                    selector.onchange = (e) => {
+                        this.currentDeviceId = e.target.value;
+                        this.startCamera(e.target.value);
+                    };
+                } catch (e) {
+                    Logger.error('Camera', 'Enumerate devices error', e);
+                }
+            }
+
+            async switchCamera() {
+                const selector = document.getElementById('cameraSelect');
+                if (selector && selector.options.length > 1) {
+                    const current = selector.selectedIndex;
+                    const next = (current + 1) % selector.options.length;
+                    selector.selectedIndex = next === 0 ? 1 : next;
+                    selector.dispatchEvent(new Event('change'));
+                } else {
+                    await this.enumerateCameras();
+                }
+            }
+        }
+
+        const App = {
+            currentStudent: null,
+            activeTab: 'tab-camera',
+            isSelectMode: false,
+            captureManager: null,
+
+            async init() {
+                try {
+                    await db.init();
+                    await SettingsManager.load();
+
+                    this.captureManager = new CaptureManager();
+                    this.captureManager.initUI();
+
+                    this.initSettingsUI();
+                    this.bindEvents();
+                    await Auth.init();
+                    await this.loadStudentList();
+                    await this.restoreLastState();
+
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.visibilityState === 'visible' && this.activeTab === 'tab-camera') {
+                            if (this.captureManager.capabilities.hasGetUserMedia) {
+                                this.captureManager.startCamera(this.captureManager.currentDeviceId);
+                            }
+                        } else if (document.visibilityState === 'hidden') {
+                            this.captureManager.stopCamera();
+                        }
+                    });
+
+                    if (SettingsManager.get('showLocation')) {
+                        LocationService.updateLocation();
+                    }
+
+                } catch (error) {
+                    Logger.error('App', 'Lỗi khởi tạo ứng dụng', error);
+                    Utils.showToast("Lỗi khởi tạo ứng dụng!");
+                }
+            },
+
+            async restoreLastState() {
+                const lastStudentId = await db.getSetting('lastSelectedStudentId', null);
+                if (lastStudentId) {
+                    const students = await db.getStudents();
+                    const found = students.find(s => s.id === lastStudentId);
+                    if (found) {
+                        this.currentStudent = found;
+                        document.getElementById('headerStudentName').textContent = found.name;
+                    }
+                }
+
+                const lastTab = await db.getSetting('lastActiveTab', 'tab-camera');
+                this.switchTab(lastTab, true);
+            },
+
+            initSettingsUI() {
+                const settings = SettingsManager.get();
+
+                const check = document.getElementById('settingWatermark');
+                check.checked = settings.enabled;
+                document.getElementById('watermarkSettingsOptions').style.display = settings.enabled ? 'block' : 'none';
+
+                document.getElementById('setUnitName').value = settings.unitName || '';
+                document.getElementById('setShowUnit').checked = !!settings.showUnit;
+                document.getElementById('setShowDate').checked = !!settings.showDate;
+                document.getElementById('setShowLocation').checked = !!settings.showLocation;
+
+                document.getElementById('setPosition').value = settings.position || 'bottom-right';
+                document.getElementById('setAlign').value = settings.align || 'right';
+                document.getElementById('setFontSize').value = settings.fontSize || 16;
+                document.getElementById('setColor').value = settings.color || '#ff2407';
+                document.getElementById('setBgColor').value = settings.bgColor || 'transparent';
+                document.getElementById('setShadow').checked = settings.shadow !== undefined ? settings.shadow : true;
+
+                LocationService.updateUIStatus();
+            },
+
+            bindEvents() {
+                document.getElementById('btnLoginGoogle')?.addEventListener('click', () => Auth.signInWithGoogle());
+                document.getElementById('btnLogout')?.addEventListener('click', () => Auth.signOut());
+
+                document.querySelectorAll('.nav-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => this.switchTab(e.currentTarget.dataset.target));
+                });
+
+                const bindAutoSave = (elementId, eventType, key, isCheckbox = false) => {
+                    const el = document.getElementById(elementId);
+                    if (!el) return;
+                    el.addEventListener(eventType, (e) => {
+                        const val = isCheckbox ? e.target.checked : e.target.value;
+                        SettingsManager.set(key, val);
+                        if (key === 'enabled') {
+                            document.getElementById('watermarkSettingsOptions').style.display = val ? 'block' :
+                            'none';
+                        }
+                        if (key === 'showLocation' && val) {
+                            LocationService.updateLocation(true);
+                        }
+                    });
+                };
+
+                bindAutoSave('settingWatermark', 'change', 'enabled', true);
+                bindAutoSave('setUnitName', 'input', 'unitName');
+                bindAutoSave('setShowUnit', 'change', 'showUnit', true);
+                bindAutoSave('setShowDate', 'change', 'showDate', true);
+                bindAutoSave('setShowLocation', 'change', 'showLocation', true);
+                bindAutoSave('setPosition', 'change', 'position');
+                bindAutoSave('setAlign', 'change', 'align');
+                bindAutoSave('setFontSize', 'input', 'fontSize');
+                bindAutoSave('setColor', 'input', 'color');
+                bindAutoSave('setBgColor', 'input', 'bgColor');
+                bindAutoSave('setShadow', 'change', 'shadow', true);
+
+                document.getElementById('btnSaveSettings')?.addEventListener('click', () => {
+                    SettingsManager.save(true);
+                    Utils.showToast('Đã lưu cấu hình watermark!');
+                });
+
+                document.getElementById('excelUpload')?.addEventListener('change', (e) => this.handleExcelImport(e));
+                document.getElementById('btnDownloadSample')?.addEventListener('click', () => this.downloadSampleExcel());
+                document.getElementById('btnClearList')?.addEventListener('click', () => this.clearStudents());
+                document.getElementById('btnAddManual')?.addEventListener('click', () => this.addManualStudent());
+                document.getElementById('searchStudent')?.addEventListener('input', (e) => this.loadStudentList(e.target
+                .value));
+                document.getElementById('manualName')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') this
+                        .addManualStudent(); });
+
+                document.getElementById('btnSwitchCamera')?.addEventListener('click', () => this.captureManager
+                    .switchCamera());
+                document.getElementById('btnCapturePhoto')?.addEventListener('click', () => this.handleCapturePhoto());
+                document.getElementById('btnRecordVideo')?.addEventListener('click', () => this.handleRecordVideo());
+                document.getElementById('btnTorchToggle')?.addEventListener('click', () => this.captureManager
+                    .toggleTorch());
+
+                document.getElementById('nativePhotoInput')?.addEventListener('change', (e) => this.handleNativeFileInput(
+                    e, 'photo'));
+                document.getElementById('nativeVideoInput')?.addEventListener('change', (e) => this.handleNativeFileInput(
+                    e, 'video'));
+
+                document.getElementById('zoomRange')?.addEventListener('input', () => this.captureManager.applyFilters());
+                document.getElementById('brightnessRange')?.addEventListener('input', () => this.captureManager
+                    .applyFilters());
+                document.getElementById('btnResetCamera')?.addEventListener('click', () => {
+                    document.getElementById('zoomRange').value = 1;
+                    document.getElementById('brightnessRange').value = 1;
+                    this.captureManager.applyFilters();
+                });
+
+                document.getElementById('btnToggleSelectMode')?.addEventListener('click', () => this.toggleSelectMode());
+                document.getElementById('btnExportSelected')?.addEventListener('click', () => this.exportSelectedMedia());
+                document.getElementById('btnDeleteSelected')?.addEventListener('click', () => this.deleteSelectedMedia());
+                document.getElementById('btnDownloadSelectedImages')?.addEventListener('click', () => this
+                    .downloadSelectedImages());
+                document.getElementById('filterType')?.addEventListener('change', () => this.loadGallery());
+
+                document.getElementById('btnSelectAllMedia')?.addEventListener('click', () => this.setAllCheckboxes(true));
+                document.getElementById('btnDeselectAllMedia')?.addEventListener('click', () => this.setAllCheckboxes(
+                false));
+
+                document.getElementById('btnCancelProcessing')?.addEventListener('click', () => {
+                    if (VideoProcessingEngine.currentJobCancel) VideoProcessingEngine.currentJobCancel();
+                });
+
+                document.getElementById('closeImageModal')?.addEventListener('click', () => {
+                    document.getElementById('imageModal').classList.add('hidden');
+                });
+
+                document.getElementById('closeVideoModal')?.addEventListener('click', () => {
+                    const m = document.getElementById('videoModal');
+                    const v = document.getElementById('modalVideo');
+                    m.classList.add('hidden');
+                    v.pause();
+                    v.src = '';
+                });
+            },
+
+            async switchTab(targetTabId, isInitialLoad = false) {
+                this.activeTab = targetTabId;
+                db.setSetting('lastActiveTab', targetTabId);
+
+                document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+
+                document.querySelector(`.nav-btn[data-target="${targetTabId}"]`)?.classList.add('active');
+                document.getElementById(targetTabId)?.classList.add('active');
+
+                if (targetTabId === 'tab-camera') {
+                    if (this.captureManager.capabilities.hasGetUserMedia) {
+                        this.captureManager.startCamera(this.captureManager.currentDeviceId);
+                    }
+                    if (SettingsManager.get('showLocation')) LocationService.updateLocation();
+                } else {
+                    this.captureManager.stopCamera();
+                }
+
+                if (targetTabId === 'tab-gallery') this.loadGallery();
+                if (targetTabId === 'tab-settings') LocationService.updateUIStatus();
+            },
+
+            async handleCapturePhoto() {
+                if (!this.currentStudent) {
+                    Utils.showToast("Vui lòng chọn học sinh trước khi chụp!");
+                    this.switchTab('tab-list');
+                    return;
+                }
+
+                if (!this.captureManager.capabilities.hasGetUserMedia) {
+                    const input = document.getElementById('nativePhotoInput');
+                    if (input) { input.value = '';
+                        input.click(); }
+                    return;
+                }
+
+                try {
+                    const settings = SettingsManager.get();
+                    const blob = await this.captureManager.capturePhoto(this.currentStudent.name, settings);
+                    const mediaEntry = await MediaPipeline.createMediaEntry(blob, 'photo', this.currentStudent.name,
+                    { enabled: false });
+                    mediaEntry.processedBlob = blob;
+                    mediaEntry.watermarkApplied = settings.enabled;
+                    mediaEntry.processingStatus = 'success';
+                    await db.saveMedia(mediaEntry);
+
+                    Utils.showToast(`Đã lưu ảnh: ${this.currentStudent.name}`);
+                    if (Auth.currentUser) SyncManager.uploadSingleMedia(mediaEntry);
+                } catch (err) {
+                    Logger.error('App', 'Lỗi chụp ảnh', err);
+                    Utils.showToast("Lỗi chụp ảnh!");
+                }
+            },
+
+            async handleRecordVideo() {
+                if (!this.currentStudent) {
+                    Utils.showToast("Vui lòng chọn học sinh!");
+                    this.switchTab('tab-list');
+                    return;
+                }
+
+                if (!this.captureManager.capabilities.hasGetUserMedia) {
+                    const input = document.getElementById('nativeVideoInput');
+                    if (input) { input.value = '';
+                        input.click(); }
+                    return;
+                }
+
+                if (this.captureManager.isRecording) {
+                    this.captureManager.stopRecording();
+                } else {
+                    this.captureManager.startRecording(this.currentStudent.name, SettingsManager.get());
+                }
+            },
+
+            async handleNativeFileInput(e, type) {
+                const file = e.target.files[0];
+                e.target.value = '';
+                if (!file) return;
+
+                if (!this.currentStudent) {
+                    Utils.showToast("Vui lòng chọn học sinh!");
+                    this.switchTab('tab-list');
+                    return;
+                }
+
+                Utils.showToast(`Đang tiếp nhận ${type === 'photo' ? 'ảnh' : 'video'} gốc...`);
+                try {
+                    const settings = SettingsManager.get();
+                    const entry = await MediaPipeline.createMediaEntry(file, type, this.currentStudent.name, settings);
+                    await MediaPipeline.processAndSave(entry, settings);
+                } catch (err) {
+                    Logger.error('App', 'Lỗi xử lý file camera thiết bị', err);
+                    Utils.showToast("Lỗi xử lý file từ Camera!");
+                }
+            },
+
+            handleExcelImport(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = async (evt) => {
+                    try {
+                        const workbook = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
+                        const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                        if (json.length === 0) { Utils.showToast("File Excel rỗng!"); return; }
+                        const keys = Object.keys(json[0]);
+                        const nameKey = keys.find(k => k.toLowerCase().includes('tên') || k.toLowerCase().includes(
+                            'name')) || keys[1] || keys[0];
+                        const newStudents = json.map((row, idx) => ({
+                            id: (Date.now() + idx).toString(),
+                            name: String(row[nameKey] || '').trim(),
+                            class: String(row['Lớp'] || row['Class'] || '').trim()
+                        })).filter(s => s.name);
+
+                        await db.saveStudents(newStudents);
+                        Utils.showToast(`Đã nhập ${newStudents.length} học sinh!`);
+                        e.target.value = '';
+                        this.loadStudentList();
+                    } catch (err) { Utils.showToast("Lỗi đọc File Excel!"); }
+                };
+                reader.readAsArrayBuffer(file);
+            },
+
+            downloadSampleExcel() {
+                const sampleData = [{ "STT": 1, "Họ và tên": "Nguyễn Văn An", "Lớp": "10A1" }];
+                const ws = XLSX.utils.json_to_sheet(sampleData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Danh_sach_mau");
+                XLSX.writeFile(wb, "Danh_Sach_Hoc_Sinh_Mau.xlsx");
+            },
+
+            async addManualStudent() {
+                const input = document.getElementById('manualName');
+                const name = input.value.trim();
+                if (!name) return Utils.showToast("Nhập họ tên!");
+                const newStudent = { id: Date.now().toString(), name, class: '' };
+                await db.saveStudents([newStudent]);
+                input.value = '';
+                input.focus();
+                this.loadStudentList();
+                Utils.showToast(`Đã thêm: ${name}`);
+            },
+
+            async clearStudents() {
+                if (confirm("Xóa toàn bộ danh sách học sinh?")) {
+                    await db.clearStudents();
+                    this.currentStudent = null;
+                    await db.setSetting('lastSelectedStudentId', null);
+                    document.getElementById('headerStudentName').textContent = "Chưa chọn học sinh";
+                    this.loadStudentList();
+                }
+            },
+
+            async loadStudentList(filterText = '') {
+                const list = await db.getStudents();
+                const ul = document.getElementById('studentList');
+                ul.innerHTML = '';
+                const filtered = list.filter(s => s.name.toLowerCase().includes(filterText.toLowerCase()));
+                if (filtered.length === 0) {
+                    ul.innerHTML = '<li style="justify-content:center; color:#888;">Chưa có dữ liệu</li>';
+                    return;
+                }
+
+                filtered.forEach(student => {
+                    const li = document.createElement('li');
+                    if (this.currentStudent?.id === student.id) li.classList.add('selected');
+                    li.innerHTML =
+                        `<span><strong>${student.name}</strong> ${student.class ? `(${student.class})` : ''}</span>
+                                <i class="fa-solid fa-circle-check" style="color: ${this.currentStudent?.id === student.id ? '#007bff' : '#555'}"></i>`;
+                    li.addEventListener('click', () => {
+                        this.currentStudent = student;
+                        db.setSetting('lastSelectedStudentId', student.id);
+                        document.getElementById('headerStudentName').textContent = student.name;
+                        this.loadStudentList(filterText);
+                        this.switchTab('tab-camera');
+                    });
+                    ul.appendChild(li);
+                });
+            },
+
+            toggleSelectMode() {
+                this.isSelectMode = !this.isSelectMode;
+                const actionBar = document.getElementById('selectionActionBar');
+                const toggleBtn = document.getElementById('btnToggleSelectMode');
+
+                if (this.isSelectMode) {
+                    actionBar.classList.remove('hidden');
+                    toggleBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Hủy chọn nhiều';
+                    toggleBtn.classList.replace('btn-secondary', 'btn-danger');
+                } else {
+                    actionBar.classList.add('hidden');
+                    toggleBtn.innerHTML = '<i class="fa-solid fa-square-check"></i> Chọn nhiều';
+                    toggleBtn.classList.replace('btn-danger', 'btn-secondary');
+                    this.setAllCheckboxes(false);
+                }
+                this.loadGallery();
+            },
+
+            updateSelectedCount() {
+                const checkedBoxes = document.querySelectorAll('.gallery-checkbox:checked');
+                const countText = document.getElementById('selectedCountText');
+                if (countText) countText.textContent = `Đã chọn: ${checkedBoxes.length}`;
+            },
+
+            setAllCheckboxes(select) {
+                const filter = document.getElementById('filterType').value;
+                const checkboxes = document.querySelectorAll('.gallery-checkbox');
+                checkboxes.forEach(cb => {
+                    if (filter === 'photo' && cb.dataset.type !== 'photo') return;
+                    if (filter === 'video' && cb.dataset.type !== 'video') return;
+                    cb.checked = select;
+                });
+                this.updateSelectedCount();
+            },
+
+            getSelectedGalleryItems() {
+                const checkedBoxes = document.querySelectorAll('.gallery-checkbox:checked');
+                const items = [];
+                checkedBoxes.forEach(cb => {
+                    if (cb._mediaObject) items.push(cb._mediaObject);
+                });
+                return items;
+            },
+
+            async loadGallery() {
+                ObjectURLManager.revokeAll();
+
+                const filter = document.getElementById('filterType').value;
+                let list = await db.getAllMedia();
+                if (filter !== 'all') list = list.filter(m => m.type === filter);
+                const grid = document.getElementById('galleryGrid');
+                grid.innerHTML = '';
+
+                if (list.length === 0) {
+                    grid.innerHTML =
+                        '<p style="grid-column: 1/-1; text-align: center; color: #888; padding: 30px;">Chưa có file media nào</p>';
+                    this.updateSelectedCount();
+                    return;
+                }
+
+                list.forEach(media => {
+                    const item = document.createElement('div');
+                    item.className = 'gallery-item';
+
+                    const activeBlob = media.processedBlob || media.originalBlob || media.blob;
+                    const url = ObjectURLManager.create(activeBlob);
+
+                    const syncBadge = media.sync_status === 'synced' ?
+                        '<span class="badge sync-badge synced" title="Đã đồng bộ"><i class="fa-solid fa-cloud-check"></i></span>' :
+                        '<span class="badge sync-badge pending" title="Chờ đồng bộ"><i class="fa-solid fa-cloud-arrow-up"></i></span>';
+
+                    let statusBadge = '';
+                    if (media.processingStatus === 'failed') {
+                        statusBadge =
+                            `<button class="badge status-badge failed btn-retry-watermark" data-id="${media.id}" title="Xử lý thất bại. Nhấn để thử lại"><i class="fa-solid fa-triangle-exclamation"></i> Thử lại</button>`;
+                    } else if (media.watermarkApplied) {
+                        statusBadge =
+                            `<span class="badge status-badge wm-active" title="Đã in Watermark"><i class="fa-solid fa-stamp"></i> WM</span>`;
+                    }
+
+                    const mediaTag = media.type === 'photo' ?
+                        `<img src="${url}" alt="photo" loading="lazy">` :
+                        `<video src="${url}" preload="metadata" playsinline></video>`;
+
+                    const checkboxDisplay = this.isSelectMode ? '' : 'style="display: none;"';
+
+                    item.innerHTML = `
+                                <input type="checkbox" class="gallery-checkbox" data-id="${media.id}" data-type="${media.type}" ${checkboxDisplay}>
+                                <div class="gallery-badges">${syncBadge} ${statusBadge}</div>
+                                ${mediaTag}
+                                <div class="gallery-info">
+                                    <strong>${media.studentName}</strong>
+                                    <span class="file-meta">${media.type.toUpperCase()} • ${Math.round((activeBlob ? activeBlob.size : 0) / 1024 / 1024 * 10) / 10} MB</span>
+                                </div>`;
+
+                    const cb = item.querySelector('.gallery-checkbox');
+                    cb._mediaObject = media;
+                    cb.addEventListener('change', () => this.updateSelectedCount());
+
+                    const retryBtn = item.querySelector('.btn-retry-watermark');
+                    if (retryBtn) {
+                        retryBtn.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            Utils.showToast("Đang thử lại xử lý watermark...");
+                            await MediaPipeline.processAndSave(media, SettingsManager.get());
+                        });
+                    }
+
+                    const mediaEl = item.querySelector('img, video');
+                    if (mediaEl) {
+                        mediaEl.addEventListener('click', () => {
+                            if (this.isSelectMode) {
+                                cb.checked = !cb.checked;
+                                this.updateSelectedCount();
+                            } else {
+                                this.viewMedia(url, media.type, media.fileName);
+                            }
+                        });
+                    }
+                    grid.appendChild(item);
+                });
+                this.updateSelectedCount();
+            },
+
+            viewMedia(url, type, fileName) {
+                if (type === 'photo') {
+                    document.getElementById('modalImg').src = url;
+                    document.getElementById('modalCaption').textContent = fileName;
+                    document.getElementById('imageModal').classList.remove('hidden');
+                } else {
+                    const v = document.getElementById('modalVideo');
+                    v.src = url;
+                    document.getElementById('modalVideoCaption').textContent = fileName;
+                    document.getElementById('videoModal').classList.remove('hidden');
+                    v.play();
+                }
+            },
+
+            async downloadSelectedImages() {
+                const selectedImages = this.getSelectedGalleryItems().filter(item => item.type === 'photo');
+                if (!selectedImages.length) { Utils.showToast('Vui lòng chọn ít nhất một ảnh!'); return; }
+
+                let successCount = 0;
+                Utils.showToast(`Đang tải ${selectedImages.length} ảnh...`);
+
+                for (let i = 0; i < selectedImages.length; i++) {
+                    const item = selectedImages[i];
+                    const targetBlob = item.processedBlob || item.originalBlob || item.blob;
+                    if (!targetBlob) continue;
+
+                    const url = ObjectURLManager.create(targetBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = item.fileName || `image_${Date.now()}.jpg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    setTimeout(() => ObjectURLManager.revoke(url), 1000);
+                    successCount++;
+                    await new Promise(res => setTimeout(res, 250));
+                }
+                Utils.showToast(`✅ Đã tải ${successCount} ảnh.`);
+            },
+
+            async exportSelectedMedia() {
+                const cbs = document.querySelectorAll('.gallery-checkbox:checked');
+                if (cbs.length === 0) return Utils.showToast("Chọn ít nhất 1 file!");
+                Utils.showToast("Đang nén file ZIP...");
+
+                const zip = new JSZip();
+                const items = this.getSelectedGalleryItems();
+
+                for (const m of items) {
+                    const activeBlob = m.processedBlob || m.originalBlob || m.blob;
+                    if (activeBlob) {
+                        zip.file(m.fileName, activeBlob);
+                    }
+                }
+
+                const content = await zip.generateAsync({ type: 'blob' });
+                saveAs(content, `Media_Studio_${Utils.formatDateForFile(Date.now())}.zip`);
+                Utils.showToast("Đã xuất tệp ZIP thành công!");
+            },
+
+            async deleteSelectedMedia() {
+                const cbs = document.querySelectorAll('.gallery-checkbox:checked');
+                if (cbs.length === 0 || !confirm(`Xóa vĩnh viễn ${cbs.length} file đã chọn?`)) return;
+
+                const items = this.getSelectedGalleryItems();
+                const ids = items.map(m => m.id);
+
+                for (const m of items) {
+                    if (Auth.currentUser && m.file_path) {
+                        try {
+                            await supabaseClient.storage.from('media').remove([m.file_path]);
+                            await supabaseClient.from('media_files').delete().eq('file_path', m.file_path);
+                        } catch (e) { /* ignore */ }
+                    }
+                }
+
+                await db.deleteMedia(ids);
+                await this.loadGallery();
+                Utils.showToast("Đã xóa media thành công!");
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if (!window.appInitialized) {
+                window.appInitialized = true;
+                App.init();
+            }
+        });
+    </script>
 </body>
 </html>
