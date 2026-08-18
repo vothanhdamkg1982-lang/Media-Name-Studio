@@ -1149,6 +1149,16 @@
         .text-sm {
             font-size: 0.8rem;
         }
+        /* ===== CAMERA FULLSCREEN MODE ===== */
+body.camera-fullscreen .app-header,
+body.camera-fullscreen .auth-container {
+    display: none !important;
+}
+
+/* Đảm bảo camera wrapper chiếm trọn phần không gian phía trên khi ẩn header */
+body.camera-fullscreen .app-main {
+    padding-top: 0;
+}
     </style>
 </head>
 
@@ -2840,6 +2850,7 @@
                     this.bindEvents();
 
                     if (this.activeTab === 'tab-camera') {
+                        document.body.classList.add('camera-fullscreen');
                         captureManager.startCamera();
                     }
                 } catch (err) {
@@ -3081,8 +3092,10 @@
                 });
 
                 if (targetTabId === 'tab-camera') {
+                    document.body.classList.add('camera-fullscreen');
                     captureManager.startCamera();
                 } else {
+                    document.body.classList.remove('camera-fullscreen');
                     captureManager.stopCamera();
                 }
 
