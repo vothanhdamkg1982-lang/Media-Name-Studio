@@ -283,7 +283,15 @@
             align-items: center;
             gap: 14px;
             border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: opacity 0.3s ease, visibility 0.3s;
+    opacity: 1;
+    visibility: visible;
         }
+        .camera-controls-panel.hidden-controls {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none; /* Tránh bấm nhầm khi ẩn */
+}
         .device-select-group select {
             background: rgba(30, 30, 30, 0.8);
             color: #fff;
@@ -2474,20 +2482,65 @@ body.camera-fullscreen .app-main {
             }
 
             initUI() {
-                const desktopZone = document.getElementById('desktopCameraZone');
-                const mobileZone = document.getElementById('mobileCameraZone');
-                const controlsPanel = document.getElementById('cameraControlsPanel');
+        const desktopZone = document.getElementById('desktopCameraZone');
+        const mobileZone = document.getElementById('mobileCameraZone');
+        const controlsPanel = document.getElementById('cameraControlsPanel');
 
-                if (!this.capabilities.hasGetUserMedia) {
-                    if (desktopZone) desktopZone.style.display = 'none';
-                    if (mobileZone) mobileZone.classList.remove('hidden');
-                    if (controlsPanel) controlsPanel.classList.add('hidden');
+        if (!this.capabilities.hasGetUserMedia) {
+            if (desktopZone) desktopZone.style.display = 'none';
+            if (mobileZone) mobileZone.classList.remove('hidden');
+            if (controlsPanel) controlsPanel.classList.add('hidden');
+        } else {
+            if (desktopZone) desktopZone.style.display = 'flex';
+            if (mobileZone) mobileZone.classList.add('hidden');
+            if (controlsPanel) controlsPanel.classList.remove('hidden');
+        }
+
+        // === XỬ LÝ ẨN/HIỆN TOGGLE (CHẠM ĐỂ HIỆN / CHẠM ĐỂ ẨN) ===
+        if (controlsPanel) {
+            let hideTimer = null;
+
+            // Hàm hiện thanh điều khiển và tự ẩn sau 3 giây
+            const showControls = () => {
+                controlsPanel.classList.remove('hidden');
+                if (hideTimer) clearTimeout(hideTimer);
+                hideTimer = setTimeout(() => {
+                    controlsPanel.classList.add('hidden');
+                }, 3000);
+            };
+
+            // Hàm ẩn thanh điều khiển ngay lập tức
+            const hideControls = () => {
+                controlsPanel.classList.add('hidden');
+                if (hideTimer) clearTimeout(hideTimer);
+            };
+
+            // Lắng nghe sự kiện trên toàn bộ document để không bị lỗi do thẻ video/canvas che khuất
+            document.addEventListener('pointerdown', (e) => {
+                // Xác định vùng camera đang hoạt động (desktop hoặc mobile)
+                const activeCameraZone = (desktopZone && desktopZone.style.display !== 'none') ? desktopZone : mobileZone;
+                
+                // Nếu bấm ngoài vùng camera thì bỏ qua
+                if (!activeCameraZone || !activeCameraZone.contains(e.target)) return;
+
+                // Nếu bấm trực tiếp vào các nút/thanh trượt trong bảng điều khiển thì để mặc định cho nút chạy
+                if (e.target.closest('#cameraControlsPanel')) return;
+
+                // Cơ chế Toggle: 
+                // Nếu đang ẩn -> Bấm vào màn hình camera sẽ HIỆN lên
+                // Nếu đang hiện -> Bấm vào màn hình camera sẽ ẨN đi ngay lập tức
+                if (controlsPanel.classList.contains('hidden')) {
+                    showControls();
                 } else {
-                    if (desktopZone) desktopZone.style.display = 'flex';
-                    if (mobileZone) mobileZone.classList.add('hidden');
-                    if (controlsPanel) controlsPanel.classList.remove('hidden');
+                    hideControls();
                 }
-            }
+            });
+
+            // Tự động ẩn sau 3 giây khi mới vừa mở camera lần đầu
+            showControls();
+        }
+        // =======================================================
+    }
 
             async startCamera(deviceId = '') {
                 if (!this.capabilities.hasGetUserMedia) return;
