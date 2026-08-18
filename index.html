@@ -3,28 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>MEDIA NAME STUDIO</title>
+    <title>MEDIA NAME STUDIO - Professional Media Capture & Watermark</title>
 
-    <!-- Thư viện Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Thư viện xử lý Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <!-- Thư viện nén ZIP và lưu file -->
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
-    <!-- Font & Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- HEADER -->
     <header class="app-header">
         <h1><i class="fa-solid fa-camera-retro"></i> MEDIA NAME STUDIO</h1>
         <div class="current-student-display" id="headerStudentName">Chưa chọn học sinh</div>
     </header>
 
-    <!-- AUTH CONTAINER -->
     <div id="authContainer" class="auth-container">
         <div id="userInfo" class="user-info" style="display: none;">
             <span><i class="fa-solid fa-user-circle"></i> <strong id="userEmail"></strong></span>
@@ -37,58 +30,82 @@
         </div>
     </div>
 
-    <!-- MAIN APP TABS -->
     <main class="app-main">
-        <!-- TAB 1: CAMERA -->
         <section id="tab-camera" class="tab-content active">
             <div class="camera-wrapper">
-                <div class="camera-top-row">
-                    <div class="camera-container">
+                <div id="cameraSurface" class="camera-container">
+                    <div id="desktopCameraZone" class="camera-preview-zone">
                         <video id="rawVideo" autoplay playsinline muted style="display: none;"></video>
                         <canvas id="outputCanvas"></canvas>
-                        <div id="recordingIndicator" class="recording-indicator hidden">
-                            <span class="dot"></span> REC <span id="recordingTime">00:00</span>
+                    </div>
+
+                    <div id="mobileCameraZone" class="camera-placeholder-zone hidden">
+                        <div class="mobile-camera-hint">
+                            <i class="fa-solid fa-camera fa-3x"></i>
+                            <p>Sử dụng Camera thiết bị (Mobile Optimized)</p>
+                            <p class="hint-sub">Nhấn CHỤP ÁNH hoặc QUAY VIDEO bên dưới để mở Camera</p>
                         </div>
                     </div>
 
-                    <!-- BẢNG ĐIỀU KHIỂN ZOOM & ĐỘ SÁNG -->
-                    <div class="camera-controls-panel">
-                        <div class="control-group">
-                            <label for="cameraSelect"><i class="fa-solid fa-video"></i> Chọn Camera:</label>
-                            <select id="cameraSelect">
-                                <option value="">-- Mặc định hệ thống --</option>
+                    <div id="recordingIndicator" class="recording-indicator hidden">
+                        <span class="dot"></span> REC <span id="recordingTime">00:00</span>
+                    </div>
+
+                    <div id="processingOverlay" class="processing-overlay hidden">
+                        <div class="processing-card">
+                            <div class="spinner"></div>
+                            <h3 id="processingTitle">Đang xử lý Watermark Video...</h3>
+                            <div class="progress-bar-container">
+                                <div id="processingProgressBar" class="progress-bar-fill" style="width: 0%;"></div>
+                            </div>
+                            <p id="processingPercentage">0%</p>
+                            <p id="processingSubtext" class="processing-subtext">Vui lòng không đóng trình duyệt...</p>
+                            <button id="btnCancelProcessing" class="btn btn-secondary btn-sm mt-2 hidden"><i class="fa-solid fa-xmark"></i> Hủy xử lý</button>
+                        </div>
+                    </div>
+
+                    <div id="cameraControlsPanel" class="camera-controls-panel">
+                        <div class="control-group device-select-group">
+                            <select id="cameraSelect" title="Chọn Camera">
+                                <option value="">-- Camera --</option>
                             </select>
-                        </div>    
-                        <div class="control-group inline">
-                            <label><i class="fa-solid fa-magnifying-glass"></i> Zoom:</label>
-                            <input type="range" id="zoomRange" min="1" max="3" step="0.1" value="1">
                         </div>
-                        <div class="control-group inline">
-                            <label><i class="fa-solid fa-sun"></i> Sáng:</label>
-                            <input type="range" id="brightnessRange" min="0.5" max="2.8" step="0.1" value="1">
+                        <div class="control-group vertical-group" title="Tăng giảm độ sáng">
+                            <i class="fa-solid fa-sun icon-bright"></i>
+                            <input type="range" id="brightnessRange" class="vertical-slider" min="0.5" max="2.8" step="0.1" value="1">
                         </div>
-                        <button id="btnResetCamera" class="btn btn-secondary w-100">
-                            <i class="fa-solid fa-rotate-right"></i> Đặt lại
+                        <div class="control-group vertical-group" title="Phóng to / Thu nhỏ">
+                            <i class="fa-solid fa-magnifying-glass icon-zoom"></i>
+                            <input type="range" id="zoomRange" class="vertical-slider" min="1" max="3" step="0.1" value="1">
+                        </div>
+                        <button id="btnResetCamera" class="btn-icon-reset" title="Đặt lại Camera">
+                            <i class="fa-solid fa-rotate-right"></i>
                         </button>
                     </div>
                 </div>
 
-                <!-- CÁC NÚT CAMERA -->
-                <div class="camera-action-buttons">
-                    <input type="file" id="nativeCameraInput" accept="image/*" capture="environment" style="display: none;">
-                    <button type="button" class="btn btn-success" id="btnNativeCamera">
-                        <i class="fa-solid fa-camera-retro"></i> Camera gốc
+                <div id="cameraActionButtons" class="camera-action-buttons">
+                    <input type="file" id="nativePhotoInput" accept="image/*" capture="environment" style="display: none;">
+                    <input type="file" id="nativeVideoInput" accept="video/*" capture="environment" style="display: none;">
+
+                    <button type="button" class="btn btn-action btn-capture-main" id="btnCapturePhoto" title="Chụp ảnh">
+                        <div class="capture-ring"></div>
+                        <span class="btn-label">CHỤP ẢNH</span>
                     </button>
-                    <button class="btn btn-secondary" id="btnSwitchCamera" title="Đổi camera">
-                        <i class="fa-solid fa-rotate"></i> Đổi Cam
+
+                    <button type="button" class="btn btn-action btn-record" id="btnRecordVideo" title="Quay video">
+                        <i class="fa-solid fa-video"></i>
+                        <span class="btn-label">QUAY VIDEO</span>
                     </button>
-                    <button class="btn btn-primary" id="btnCapturePhoto"><i class="fa-solid fa-camera"></i> CHỤP</button>
-                    <button class="btn btn-danger" id="btnRecordVideo"><i class="fa-solid fa-video"></i> QUAY</button>
+
+                    <button type="button" class="btn btn-action btn-switch" id="btnSwitchCamera" title="Đổi camera">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span class="btn-label">Đổi Cam</span>
+                    </button>
                 </div>
             </div>
         </section>
 
-        <!-- TAB 2: LIST -->
         <section id="tab-list" class="tab-content">
             <div class="panel">
                 <h2>Quản lý danh sách học sinh</h2>
@@ -97,9 +114,7 @@
                         <i class="fa-solid fa-file-excel"></i> Import Excel
                     </label>
                     <input type="file" id="excelUpload" accept=".xlsx, .xls, .csv" hidden>
-                    <button class="btn btn-primary" id="btnDownloadSample" title="Tải file Excel mẫu">
-                        <i class="fa-solid fa-download"></i> File mẫu
-                    </button>
+                    <button class="btn btn-primary" id="btnDownloadSample"><i class="fa-solid fa-download"></i> File mẫu</button>
                     <button class="btn btn-danger" id="btnClearList"><i class="fa-solid fa-trash"></i> Xóa DS</button>
                 </div>
                 <div class="search-box">
@@ -113,12 +128,9 @@
             </div>
         </section>
 
-        <!-- TAB 3: GALLERY -->
         <section id="tab-gallery" class="tab-content">
             <div class="panel">
                 <h2>Thư viện Media</h2>
-                
-                <!-- THANH CÔNG CỤ GALLERY & CHỌN NHIỀU -->
                 <div class="gallery-controls-wrapper">
                     <div class="gallery-controls">
                         <select id="filterType" class="form-control select-inline">
@@ -130,44 +142,28 @@
                             <i class="fa-solid fa-square-check"></i> Chọn nhiều
                         </button>
                     </div>
-
-                    <!-- THANH CÔNG CỤ KHI BẬT CHẾ ĐỘ CHỌN NHIỀU -->
                     <div id="selectionActionBar" class="selection-action-bar hidden">
                         <div class="selection-status-row">
                             <span id="selectedCountText">Đã chọn: 0</span>
                         </div>
                         <div class="selection-buttons-row">
-                            <button class="btn btn-secondary btn-sm" id="btnSelectAllMedia">
-                                <i class="fa-solid fa-check-double"></i> Chọn tất cả
-                            </button>
-                            <button class="btn btn-secondary btn-sm" id="btnDeselectAllMedia">
-                                <i class="fa-solid fa-xmark"></i> Bỏ chọn
-                            </button>
-                            <button class="btn btn-success btn-sm" id="btnDownloadSelectedImages">
-                                <i class="fa-solid fa-download"></i> Tải ảnh đã chọn
-                            </button>
-                            <button class="btn btn-primary btn-sm" id="btnExportSelected">
-                                <i class="fa-solid fa-file-zipper"></i> Xuất ZIP
-                            </button>
-                            <button class="btn btn-danger btn-sm" id="btnDeleteSelected">
-                                <i class="fa-solid fa-trash"></i> Xóa chọn
-                            </button>
+                            <button class="btn btn-secondary btn-sm" id="btnSelectAllMedia"><i class="fa-solid fa-check-double"></i> Chọn tất cả</button>
+                            <button class="btn btn-secondary btn-sm" id="btnDeselectAllMedia"><i class="fa-solid fa-xmark"></i> Bỏ chọn</button>
+                            <button class="btn btn-success btn-sm" id="btnDownloadSelectedImages"><i class="fa-solid fa-download"></i> Tải ảnh</button>
+                            <button class="btn btn-primary btn-sm" id="btnExportSelected"><i class="fa-solid fa-file-zipper"></i> Xuất ZIP</button>
+                            <button class="btn btn-danger btn-sm" id="btnDeleteSelected"><i class="fa-solid fa-trash"></i> Xóa</button>
                         </div>
                     </div>
                 </div>
-
                 <div class="gallery-grid" id="galleryGrid"></div>
             </div>
         </section>
 
-        <!-- TAB 4: SETTINGS -->
         <section id="tab-settings" class="tab-content">
             <div class="panel">
                 <h2>Cài đặt Watermark</h2>
                 <div class="form-group checkbox-group highlight-box">
-                    <label>
-                        <input type="checkbox" id="settingWatermark"> In tên và ngày chụp vào ảnh
-                    </label>
+                    <label><input type="checkbox" id="settingWatermark"> In tên và ngày chụp vào ảnh/video</label>
                 </div>
                 <div id="watermarkSettingsOptions" style="display: none;">
                     <div class="form-group">
@@ -177,6 +173,14 @@
                     <div class="form-group checkbox-group">
                         <label><input type="checkbox" id="setShowUnit"> Hiển thị tên đơn vị</label>
                         <label><input type="checkbox" id="setShowDate"> Hiển thị ngày giờ thực</label>
+                    </div>
+                    <div class="form-group location-setting-card">
+                        <label class="location-card-title"><i class="fa-solid fa-location-dot"></i> Vị trí GPS & Địa phương</label>
+                        <div class="checkbox-group mt-1">
+                            <label><input type="checkbox" id="setShowLocation"> Ghi địa phương GPS vào media</label>
+                        </div>
+                        <div id="locationStatusDisplay" class="location-status-text">📍 Vị trí chưa cập nhật</div>
+                        <p class="setting-desc-text">Tự động chuyển tọa độ GPS thành tên Xã/Phường, Huyện/Quận, Tỉnh/TP trên watermark.</p>
                     </div>
                     <div class="form-group">
                         <label for="setPosition">Vị trí Watermark:</label>
@@ -196,16 +200,19 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="setFontSize">Cỡ chữ (px):</label>
-                        <input type="number" id="setFontSize" class="form-control" value="12" min="10" max="100">
+                        <label for="setFontSize">Cỡ chữ cơ sở (px - Tự scale theo độ phân giải):</label>
+                        <input type="number" id="setFontSize" class="form-control" value="16" min="10" max="100">
                     </div>
                     <div class="form-group">
                         <label for="setColor">Màu chữ:</label>
                         <input type="color" id="setColor" class="form-control color-picker" value="#ff2407">
                     </div>
                     <div class="form-group">
-                        <label for="setBgColor">Màu nền hộp chữ (từ khóa hoặc HEX/RGBA):</label>
+                        <label for="setBgColor">Màu nền hộp chữ (transparent hoặc HEX/RGBA):</label>
                         <input type="text" id="setBgColor" class="form-control" value="transparent">
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <label><input type="checkbox" id="setShadow" checked> Bật bóng đen cho chữ (Nổi bật trên nền sáng)</label>
                     </div>
                 </div>
                 <button id="btnSaveSettings" class="btn btn-primary w-100 btn-large mt-3">
@@ -215,7 +222,6 @@
         </section>
     </main>
 
-    <!-- BOTTOM NAVIGATION -->
     <nav class="bottom-nav">
         <button class="nav-btn active" data-target="tab-camera"><i class="fa-solid fa-camera"></i> Camera</button>
         <button class="nav-btn" data-target="tab-list"><i class="fa-solid fa-list-check"></i> Danh sách</button>
@@ -223,10 +229,8 @@
         <button class="nav-btn" data-target="tab-settings"><i class="fa-solid fa-sliders"></i> Cài đặt</button>
     </nav>
 
-    <!-- TOAST NOTIFICATION -->
     <div id="toast" class="toast hidden"></div>
 
-    <!-- MODALS -->
     <div id="imageModal" class="modal hidden">
         <span class="modal-close" id="closeImageModal">&times;</span>
         <img id="modalImg" class="modal-content" alt="Preview Image">
@@ -234,11 +238,10 @@
     </div>
     <div id="videoModal" class="modal hidden">
         <span class="modal-close" id="closeVideoModal">&times;</span>
-        <video id="modalVideo" class="modal-content" controls></video>
+        <video id="modalVideo" class="modal-content" controls playsinline></video>
         <div id="modalVideoCaption" class="modal-caption"></div>
     </div>
 
-    <!-- MAIN APP SCRIPT -->
     <script src="script.js"></script>
 </body>
 </html>
