@@ -110,14 +110,14 @@
             position: relative;
         }
         .tab-content {
-            display: none;
-            min-height: 100%;
-            padding-bottom: calc(80px + env(safe-area-inset-bottom));
-        }
+    display: none;
+    min-height: 100%;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+}
 
-        .tab-content.active {
-            display: block;
-        }
+.tab-content.active {
+    display: block;
+}
 
         /* ===== CAMERA TAB ===== */
         #tab-camera.tab-content {
@@ -283,16 +283,7 @@
             align-items: center;
             gap: 14px;
             border: 1px solid rgba(255, 255, 255, 0.15);
-            transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
         }
-
-        .camera-controls-panel.controls-hidden {
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none;
-            transform: translateY(-50%) translateX(20px);
-        }
-
         .device-select-group select {
             background: rgba(30, 30, 30, 0.8);
             color: #fff;
@@ -409,19 +400,8 @@
         }
 
         /* ================================================================
-                   SETTINGS PANEL — OPTIMIZED FOR MOBILE SCROLL
+                   SETTINGS PANEL — OPTIMIZED FOR WINDOW + MOBILE
                    ================================================================ */
-        #tab-settings.tab-content {
-            height: 100%;
-            overflow-y: auto;
-            overflow-x: hidden;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        #tab-settings .panel {
-            padding-bottom: calc(120px + env(safe-area-inset-bottom));
-        }
-
         .panel {
             padding: 16px 14px;
             max-width: 780px;
@@ -2589,170 +2569,137 @@ body.camera-fullscreen .app-main {
             async toggleTorch() {
                 if (!this.videoTrack || typeof this.videoTrack.applyConstraints !== 'function') return;
                 try {
+                    const caps = this.videoTrack.getCapabilities ? this.videoTrack.getCapabilities() : {};
+                    if (!caps.torch) return;
+
                     this.torchActive = !this.torchActive;
                     await this.videoTrack.applyConstraints({
                         advanced: [{ torch: this.torchActive }]
                     });
-                    const btn = document.getElementById('btnTorchToggle');
-                    if (btn) {
-                        btn.style.color = this.torchActive ? '#ffeb3b' : '#ffffff';
+
+                    const torchBtn = document.getElementById('btnTorchToggle');
+                    if (torchBtn) {
+                        torchBtn.style.color = this.torchActive ? '#ffeb3b' : '#ffffff';
                     }
-                } catch (e) {
-                    Logger.error('Camera', 'Toggle torch failed', e);
-                }
-            }
-
-            async enumerateCameras() {
-                if (!this.capabilities.hasEnumerateDevices) return;
-                try {
-                    const devices = await navigator.mediaDevices.enumerateDevices();
-                    const videoDevices = devices.filter(d => d.kind === 'videoinput');
-                    const select = document.getElementById('cameraSelect');
-                    if (!select) return;
-
-                    select.innerHTML = '<option value="">-- Camera --</option>';
-                    videoDevices.forEach((dev, idx) => {
-                        const opt = document.createElement('option');
-                        opt.value = dev.deviceId;
-                        opt.textContent = dev.label || `Camera ${idx + 1}`;
-                        if (dev.deviceId === this.currentDeviceId) opt.selected = true;
-                        select.appendChild(opt);
-                    });
                 } catch (err) {
-                    Logger.error('Camera', 'Enumerate devices error', err);
+                    Logger.error('Camera', 'Bật tắt Flash thất bại', err);
                 }
             }
 
-            applyFilters() {
-                const brightnessEl = document.getElementById('brightnessRange');
-                const zoomEl = document.getElementById('zoomRange');
-                const canvas = document.getElementById('outputCanvas');
-
-                const brightness = brightnessEl ? parseFloat(brightnessEl.value) : 1;
-                const zoom = zoomEl ? parseFloat(zoomEl.value) : 1;
-
-                if (canvas) {
-                    canvas.style.filter = `brightness(${brightness})`;
-                    canvas.style.transform = `scale(${zoom})`;
-                }
-
-                if (this.videoTrack && typeof this.videoTrack.getCapabilities === 'function') {
-                    try {
-                        const caps = this.videoTrack.getCapabilities();
-                        if (caps.zoom) {
-                            const minZoom = caps.zoom.min || 1;
-                            const maxZoom = caps.zoom.max || 3;
-                            const targetZoom = Math.min(Math.max(zoom, minZoom), maxZoom);
-                            this.videoTrack.applyConstraints({ advanced: [{ zoom: targetZoom }] }).catch(() => {});
-                        }
-                    } catch (e) { /* fallback to canvas transform */ }
-                }
-            }
-
-            resetControls() {
-                const brightnessEl = document.getElementById('brightnessRange');
-                const zoomEl = document.getElementById('zoomRange');
-                if (brightnessEl) brightnessEl.value = 1;
-                if (zoomEl) zoomEl.value = 1;
-                this.applyFilters();
-                Utils.showToast("Đã đặt lại Camera");
+            async applyHardwareZoom(zoomVal) {
+                if (!this.videoTrack || typeof this.videoTrack.applyConstraints !== 'function') return false;
+                try {
+                    const caps = this.videoTrack.getCapabilities ? this.videoTrack.getCapabilities() : {};
+                    if (caps.zoom) {
+                        const min = caps.zoom.min || 1;
+                        const max = caps.zoom.max || 3;
+                        const targetZoom = Math.min(Math.max(zoomVal, min), max);
+                        await this.videoTrack.applyConstraints({ advanced: [{ zoom: targetZoom }] });
+                        return true;
+                    }
+                } catch (e) { /* fallback */ }
+                return false;
             }
 
             startCanvasLoop() {
                 const video = document.getElementById('rawVideo');
                 const canvas = document.getElementById('outputCanvas');
-                if (!video || !canvas) return;
-                const ctx = canvas.getContext('2d');
+                if (!canvas || !video) return;
+
+                const ctx = canvas.getContext('2d', { alpha: false });
 
                 const render = () => {
-                    if (video.readyState >= video.HAVE_CURRENT_DATA) {
+                    if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
                         if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-                            canvas.width = video.videoWidth || 1280;
-                            canvas.height = video.videoHeight || 720;
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
                         }
                         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                        const settings = SettingsManager.get();
-                        if (settings && settings.enabled) {
-                            const locText = settings.showLocation ? LocationService.getLocationDisplayString() : null;
-                            const studentName = App.selectedStudent ? App.selectedStudent.name : '';
-                            WatermarkEngine.drawToCanvas(canvas, studentName, settings, locText);
+                        if (this.isRecording && this.recordingStudent && this.recordingSettings && this.recordingSettings
+                            .enabled) {
+                            let locText = null;
+                            if (this.recordingSettings.showLocation) {
+                                locText = LocationService.getLocationDisplayString();
+                            }
+                            WatermarkEngine.drawToCanvas(canvas, this.recordingStudent, this.recordingSettings, locText);
                         }
                     }
-                    this.animationFrameId = requestAnimationFrame(render);
+                    if (this.stream) {
+                        this.animationFrameId = requestAnimationFrame(render);
+                    }
                 };
-                if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
                 render();
             }
 
-            async capturePhoto() {
-                const student = App.selectedStudent;
-                if (!student) {
-                    Utils.showToast("Vui lòng chọn học sinh trước khi chụp!");
-                    return;
-                }
+            async applyFilters() {
+                const zoom = parseFloat(document.getElementById('zoomRange')?.value) || 1;
+                const bright = parseFloat(document.getElementById('brightnessRange')?.value) || 1;
+                const canvas = document.getElementById('outputCanvas');
 
-                const settings = SettingsManager.get();
+                const hardwareApplied = await this.applyHardwareZoom(zoom);
 
-                if (!this.capabilities.hasGetUserMedia) {
-                    const nativeInput = document.getElementById('nativePhotoInput');
-                    if (nativeInput) nativeInput.click();
-                    return;
-                }
-
-                try {
-                    const canvas = document.getElementById('outputCanvas');
-                    if (!canvas || canvas.width === 0) {
-                        Utils.showToast("Camera chưa sẵn sàng!");
-                        return;
-                    }
-
-                    const offscreenCanvas = document.createElement('canvas');
-                    offscreenCanvas.width = canvas.width;
-                    offscreenCanvas.height = canvas.height;
-                    const ctx = offscreenCanvas.getContext('2d');
-
-                    const rawVideo = document.getElementById('rawVideo');
-                    ctx.drawImage(rawVideo, 0, 0, canvas.width, canvas.height);
-
-                    offscreenCanvas.toBlob(async (blob) => {
-                        if (!blob) {
-                            Utils.showToast("Lỗi tạo tệp ảnh!");
-                            return;
-                        }
-                        const entry = await MediaPipeline.createMediaEntry(blob, 'photo', student.name, settings);
-                        MediaPipeline.processAndSave(entry, settings);
-                    }, 'image/jpeg', 0.92);
-
-                } catch (err) {
-                    Logger.error('Camera', 'Capture photo failed', err);
-                    Utils.showToast("Lỗi khi chụp ảnh!");
+                if (canvas) {
+                    canvas.style.transform = hardwareApplied ? 'none' : `scale(${zoom})`;
+                    canvas.style.filter = bright !== 1 ? `brightness(${bright})` : 'none';
                 }
             }
 
-            async startRecording() {
-                const student = App.selectedStudent;
-                if (!student) {
-                    Utils.showToast("Vui lòng chọn học sinh trước khi quay video!");
-                    return;
+            async capturePhoto(studentName, settings) {
+                if (!this.isCameraReady) throw new AppError('CameraError', 'Camera chưa sẵn sàng');
+
+                const canvas = document.getElementById('outputCanvas');
+                if (!canvas || canvas.width === 0) throw new AppError('CameraError', 'Khung hình rỗng');
+
+                let locationText = null;
+                if (settings.showLocation) {
+                    locationText = LocationService.getLocationDisplayString();
                 }
 
-                if (!this.capabilities.hasGetUserMedia || !this.capabilities.hasMediaRecorder) {
-                    const nativeVideoInput = document.getElementById('nativeVideoInput');
-                    if (nativeVideoInput) nativeVideoInput.click();
-                    return;
+                const captureCanvas = document.createElement('canvas');
+                captureCanvas.width = canvas.width;
+                captureCanvas.height = canvas.height;
+                const ctx = captureCanvas.getContext('2d');
+
+                const brightness = parseFloat(document.getElementById('brightnessRange')?.value) || 1;
+                const zoom = parseFloat(document.getElementById('zoomRange')?.value) || 1;
+
+                ctx.save();
+                if (brightness !== 1) ctx.filter = `brightness(${brightness})`;
+                if (zoom !== 1) {
+                    const cx = captureCanvas.width / 2;
+                    const cy = captureCanvas.height / 2;
+                    ctx.translate(cx, cy);
+                    ctx.scale(zoom, zoom);
+                    ctx.translate(-cx, -cy);
                 }
+                ctx.drawImage(canvas, 0, 0, captureCanvas.width, captureCanvas.height);
+                ctx.restore();
+
+                WatermarkEngine.drawToCanvas(captureCanvas, studentName, settings, locationText);
+
+                return new Promise(resolve => captureCanvas.toBlob(resolve, 'image/jpeg', 0.92));
+            }
+
+            startRecording(studentName, settings) {
+                if (this.isRecording) return;
+                if (!this.isCameraReady) { Utils.showToast("Camera chưa sẵn sàng!"); return; }
+
+                const canvas = document.getElementById('outputCanvas');
+                if (!canvas || canvas.width === 0) return;
+
+                this.recordingStudent = studentName;
+                this.recordingSettings = settings;
 
                 try {
-                    const canvas = document.getElementById('outputCanvas');
                     const canvasStream = canvas.captureStream(30);
-
-                    if (this.stream && this.stream.getAudioTracks().length > 0) {
-                        canvasStream.addTrack(this.stream.getAudioTracks()[0]);
-                    }
+                    const audioTracks = this.stream ? this.stream.getAudioTracks() : [];
+                    const combinedStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
 
                     const mimeType = Utils.getBestSupportedVideoMimeType();
-                    this.mediaRecorder = new MediaRecorder(canvasStream, { mimeType, videoBitsPerSecond: 2500000 });
+                    if (!mimeType) { Utils.showToast("Trình duyệt không hỗ trợ quay video!"); return; }
+
+                    this.mediaRecorder = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 2500000 });
                     this.recordedChunks = [];
 
                     this.mediaRecorder.ondataavailable = e => {
@@ -2761,719 +2708,669 @@ body.camera-fullscreen .app-main {
 
                     this.mediaRecorder.onstop = async () => {
                         const blob = new Blob(this.recordedChunks, { type: mimeType });
-                        const settings = SettingsManager.get();
-                        const entry = await MediaPipeline.createMediaEntry(blob, 'video', student.name, settings);
-                        MediaPipeline.processAndSave(entry, settings);
+                        if (blob.size > 0) {
+                            const entry = await MediaPipeline.createMediaEntry(blob, 'video', studentName, { enabled: false });
+                            entry.processedBlob = blob;
+                            entry.watermarkApplied = settings.enabled;
+                            entry.processingStatus = 'success';
+                            await db.saveMedia(entry);
+                            Utils.showToast(`Đã lưu video: ${studentName}`);
+                            if (Auth.currentUser) SyncManager.uploadSingleMedia(entry);
+                            if (App.activeTab === 'tab-gallery') App.loadGallery();
+                        }
+                        this.recordedChunks = [];
+                        this.recordingStudent = null;
+                        this.recordingSettings = null;
                     };
 
-                    this.recordingStudent = student.name;
-                    this.recordingSettings = SettingsManager.get();
                     this.mediaRecorder.start();
                     this.isRecording = true;
                     this.recordStartTime = Date.now();
 
-                    const indicator = document.getElementById('recordingIndicator');
-                    if (indicator) indicator.classList.remove('hidden');
-
-                    const btnRecord = document.getElementById('btnRecordVideo');
-                    if (btnRecord) {
-                        btnRecord.classList.add('recording');
-                        btnRecord.querySelector('.btn-label').textContent = 'DỪNG QUAY';
-                    }
+                    const btn = document.getElementById('btnRecordVideo');
+                    if (btn) btn.innerHTML = '<i class="fa-solid fa-square"></i><span class="btn-label">DỪNG</span>';
+                    document.getElementById('recordingIndicator').classList.remove('hidden');
 
                     this.recordTimer = setInterval(() => {
-                        const elapsed = Math.floor((Date.now() - this.recordStartTime) / 1000);
-                        const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
-                        const secs = String(elapsed % 60).padStart(2, '0');
-                        const timeEl = document.getElementById('recordingTime');
-                        if (timeEl) timeEl.textContent = `${mins}:${secs}`;
+                        const d = Math.floor((Date.now() - this.recordStartTime) / 1000);
+                        document.getElementById('recordingTime').textContent =
+                            `${String(Math.floor(d / 60)).padStart(2, '0')}:${String(d % 60).padStart(2, '0')}`;
                     }, 1000);
 
-                    Utils.showToast("🎥 Đang quay video...");
-
                 } catch (err) {
-                    Logger.error('Camera', 'Start recording failed', err);
-                    Utils.showToast("Không thể bắt đầu quay video!");
+                    Logger.error('Recording', 'Bắt đầu quay video thất bại', err);
+                    Utils.showToast("Lỗi khởi tạo quay video!");
                 }
             }
 
             stopRecording() {
-                if (!this.isRecording || !this.mediaRecorder) return;
-                try {
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
                     this.mediaRecorder.stop();
-                } catch (e) { /* ignore */ }
-                this.isRecording = false;
-
-                if (this.recordTimer) {
-                    clearInterval(this.recordTimer);
-                    this.recordTimer = null;
                 }
+                this.isRecording = false;
+                clearInterval(this.recordTimer);
 
-                const indicator = document.getElementById('recordingIndicator');
-                if (indicator) indicator.classList.add('hidden');
+                const btn = document.getElementById('btnRecordVideo');
+                if (btn) btn.innerHTML = '<i class="fa-solid fa-video"></i><span class="btn-label">QUAY VIDEO</span>';
+                document.getElementById('recordingIndicator')?.classList.add('hidden');
+                document.getElementById('recordingTime').textContent = '00:00';
+            }
 
-                const btnRecord = document.getElementById('btnRecordVideo');
-                if (btnRecord) {
-                    btnRecord.classList.remove('recording');
-                    btnRecord.querySelector('.btn-label').textContent = 'QUAY VIDEO';
+            async enumerateCameras() {
+                if (!this.capabilities.hasEnumerateDevices) return;
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                    const selector = document.getElementById('cameraSelect');
+                    if (!selector) return;
+
+                    const currentValue = selector.value;
+                    selector.innerHTML = '<option value="">-- Camera --</option>';
+                    videoDevices.forEach((d, i) => {
+                        const opt = document.createElement('option');
+                        opt.value = d.deviceId;
+                        opt.text = d.label || `Camera ${i + 1}`;
+                        selector.appendChild(opt);
+                    });
+
+                    if (currentValue && [...selector.options].some(o => o.value === currentValue)) {
+                        selector.value = currentValue;
+                    }
+
+                    selector.onchange = (e) => {
+                        this.currentDeviceId = e.target.value;
+                        this.startCamera(e.target.value);
+                    };
+                } catch (e) {
+                    Logger.error('Camera', 'Enumerate devices error', e);
                 }
             }
 
-            toggleRecording() {
-                if (this.isRecording) {
-                    this.stopRecording();
+            async switchCamera() {
+                const selector = document.getElementById('cameraSelect');
+                if (selector && selector.options.length > 1) {
+                    const current = selector.selectedIndex;
+                    const next = (current + 1) % selector.options.length;
+                    selector.selectedIndex = next === 0 ? 1 : next;
+                    selector.dispatchEvent(new Event('change'));
                 } else {
-                    this.startRecording();
+                    await this.enumerateCameras();
                 }
             }
         }
 
-        const captureManager = new CaptureManager();
-
         const App = {
+            currentStudent: null,
             activeTab: 'tab-camera',
-            students: [],
-            selectedStudent: null,
-            selectedMediaIds: new Set(),
             isSelectMode: false,
+            captureManager: null,
 
             async init() {
                 try {
                     await db.init();
                     await SettingsManager.load();
-                    await Auth.init();
-                    LocationService.updateLocation();
-                    captureManager.initUI();
 
-                    this.loadSettingsToUI();
-                    await this.loadStudentList();
+                    this.captureManager = new CaptureManager();
+                    this.captureManager.initUI();
+
+                    this.initSettingsUI();
                     this.bindEvents();
+                    await Auth.init();
+                    await this.loadStudentList();
+                    await this.restoreLastState();
 
-                    if (this.activeTab === 'tab-camera') {
-                        document.body.classList.add('camera-fullscreen');
-                        captureManager.startCamera();
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.visibilityState === 'visible' && this.activeTab === 'tab-camera') {
+                            document.body.classList.add('camera-fullscreen');
+                            if (this.captureManager.capabilities.hasGetUserMedia) {
+                                this.captureManager.startCamera(this.captureManager.currentDeviceId);
+                            }
+                        } else if (document.visibilityState === 'hidden') {
+                            this.captureManager.stopCamera();
+                        }
+                    });
+
+                    if (SettingsManager.get('showLocation')) {
+                        LocationService.updateLocation();
                     }
-                } catch (err) {
-                    Logger.error('App', 'App initialization error', err);
+
+                } catch (error) {
+                    Logger.error('App', 'Lỗi khởi tạo ứng dụng', error);
+                    Utils.showToast("Lỗi khởi tạo ứng dụng!");
                 }
+            },
+
+            async restoreLastState() {
+                const lastStudentId = await db.getSetting('lastSelectedStudentId', null);
+                if (lastStudentId) {
+                    const students = await db.getStudents();
+                    const found = students.find(s => s.id === lastStudentId);
+                    if (found) {
+                        this.currentStudent = found;
+                        document.getElementById('headerStudentName').textContent = found.name;
+                    }
+                }
+
+                const lastTab = await db.getSetting('lastActiveTab', 'tab-camera');
+                this.switchTab(lastTab, true);
+            },
+
+            initSettingsUI() {
+                const settings = SettingsManager.get();
+
+                const check = document.getElementById('settingWatermark');
+                check.checked = settings.enabled;
+                document.getElementById('watermarkSettingsOptions').style.display = settings.enabled ? 'block' : 'none';
+
+                document.getElementById('setUnitName').value = settings.unitName || '';
+                document.getElementById('setShowUnit').checked = !!settings.showUnit;
+                document.getElementById('setShowDate').checked = !!settings.showDate;
+                document.getElementById('setShowLocation').checked = !!settings.showLocation;
+
+                document.getElementById('setPosition').value = settings.position || 'bottom-right';
+                document.getElementById('setAlign').value = settings.align || 'right';
+                document.getElementById('setFontSize').value = settings.fontSize || 16;
+                document.getElementById('setColor').value = settings.color || '#ff2407';
+                document.getElementById('setBgColor').value = settings.bgColor || 'transparent';
+                document.getElementById('setShadow').checked = settings.shadow !== undefined ? settings.shadow : true;
+
+                LocationService.updateUIStatus();
             },
 
             bindEvents() {
-                // Nav switching
-                document.querySelectorAll('.bottom-nav .nav-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        const target = btn.getAttribute('data-target');
-                        this.switchTab(target);
-                    });
+                document.getElementById('btnLoginGoogle')?.addEventListener('click', () => Auth.signInWithGoogle());
+                document.getElementById('btnLogout')?.addEventListener('click', () => Auth.signOut());
+
+                document.querySelectorAll('.nav-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => this.switchTab(e.currentTarget.dataset.target));
                 });
 
-                // Camera surface toggle controls (REQUIREMENT 2)
-                const cameraSurface = document.getElementById('cameraSurface');
-                if (cameraSurface) {
-                    let pointerStartX = 0;
-                    let pointerStartY = 0;
-
-                    cameraSurface.addEventListener('pointerdown', (e) => {
-                        pointerStartX = e.clientX;
-                        pointerStartY = e.clientY;
-                    });
-
-                    cameraSurface.addEventListener('pointerup', (e) => {
-                        if (e.target.closest('#cameraControlsPanel')) return;
-                        if (e.target.closest('#processingOverlay') || e.target.closest('#recordingIndicator')) return;
-
-                        const dist = Math.hypot(e.clientX - pointerStartX, e.clientY - pointerStartY);
-                        if (dist > 10) return;
-
-                        const panel = document.getElementById('cameraControlsPanel');
-                        if (panel) {
-                            panel.classList.toggle('controls-hidden');
+                const bindAutoSave = (elementId, eventType, key, isCheckbox = false) => {
+                    const el = document.getElementById(elementId);
+                    if (!el) return;
+                    el.addEventListener(eventType, (e) => {
+                        const val = isCheckbox ? e.target.checked : e.target.value;
+                        SettingsManager.set(key, val);
+                        if (key === 'enabled') {
+                            document.getElementById('watermarkSettingsOptions').style.display = val ? 'block' :
+                            'none';
+                        }
+                        if (key === 'showLocation' && val) {
+                            LocationService.updateLocation(true);
                         }
                     });
-                }
+                };
 
-                // Camera controls bindings
-                const brightnessRange = document.getElementById('brightnessRange');
-                if (brightnessRange) brightnessRange.addEventListener('input', () => captureManager.applyFilters());
+                bindAutoSave('settingWatermark', 'change', 'enabled', true);
+                bindAutoSave('setUnitName', 'input', 'unitName');
+                bindAutoSave('setShowUnit', 'change', 'showUnit', true);
+                bindAutoSave('setShowDate', 'change', 'showDate', true);
+                bindAutoSave('setShowLocation', 'change', 'showLocation', true);
+                bindAutoSave('setPosition', 'change', 'position');
+                bindAutoSave('setAlign', 'change', 'align');
+                bindAutoSave('setFontSize', 'input', 'fontSize');
+                bindAutoSave('setColor', 'input', 'color');
+                bindAutoSave('setBgColor', 'input', 'bgColor');
+                bindAutoSave('setShadow', 'change', 'shadow', true);
 
-                const zoomRange = document.getElementById('zoomRange');
-                if (zoomRange) zoomRange.addEventListener('input', () => captureManager.applyFilters());
+                document.getElementById('btnSaveSettings')?.addEventListener('click', () => {
+                    SettingsManager.save(true);
+                    Utils.showToast('Đã lưu cấu hình watermark!');
+                });
 
-                const cameraSelect = document.getElementById('cameraSelect');
-                if (cameraSelect) {
-                    cameraSelect.addEventListener('change', (e) => {
-                        captureManager.currentDeviceId = e.target.value;
-                        captureManager.startCamera(e.target.value);
-                    });
-                }
+                document.getElementById('excelUpload')?.addEventListener('change', (e) => this.handleExcelImport(e));
+                document.getElementById('btnDownloadSample')?.addEventListener('click', () => this.downloadSampleExcel());
+                document.getElementById('btnClearList')?.addEventListener('click', () => this.clearStudents());
+                document.getElementById('btnAddManual')?.addEventListener('click', () => this.addManualStudent());
+                document.getElementById('searchStudent')?.addEventListener('input', (e) => this.loadStudentList(e.target
+                .value));
+                document.getElementById('manualName')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') this
+                        .addManualStudent(); });
 
-                const btnTorchToggle = document.getElementById('btnTorchToggle');
-                if (btnTorchToggle) btnTorchToggle.addEventListener('click', () => captureManager.toggleTorch());
+                document.getElementById('btnSwitchCamera')?.addEventListener('click', () => this.captureManager
+                    .switchCamera());
+                document.getElementById('btnCapturePhoto')?.addEventListener('click', () => this.handleCapturePhoto());
+                document.getElementById('btnRecordVideo')?.addEventListener('click', () => this.handleRecordVideo());
+                document.getElementById('btnTorchToggle')?.addEventListener('click', () => this.captureManager
+                    .toggleTorch());
 
-                const btnResetCamera = document.getElementById('btnResetCamera');
-                if (btnResetCamera) btnResetCamera.addEventListener('click', () => captureManager.resetControls());
+                document.getElementById('nativePhotoInput')?.addEventListener('change', (e) => this.handleNativeFileInput(
+                    e, 'photo'));
+                document.getElementById('nativeVideoInput')?.addEventListener('change', (e) => this.handleNativeFileInput(
+                    e, 'video'));
 
-                // Action buttons
-                const btnCapturePhoto = document.getElementById('btnCapturePhoto');
-                if (btnCapturePhoto) btnCapturePhoto.addEventListener('click', () => captureManager.capturePhoto());
+                document.getElementById('zoomRange')?.addEventListener('input', () => this.captureManager.applyFilters());
+                document.getElementById('brightnessRange')?.addEventListener('input', () => this.captureManager
+                    .applyFilters());
+                document.getElementById('btnResetCamera')?.addEventListener('click', () => {
+                    document.getElementById('zoomRange').value = 1;
+                    document.getElementById('brightnessRange').value = 1;
+                    this.captureManager.applyFilters();
+                });
 
-                const btnRecordVideo = document.getElementById('btnRecordVideo');
-                if (btnRecordVideo) btnRecordVideo.addEventListener('click', () => captureManager.toggleRecording());
+                document.getElementById('btnToggleSelectMode')?.addEventListener('click', () => this.toggleSelectMode());
+                document.getElementById('btnExportSelected')?.addEventListener('click', () => this.exportSelectedMedia());
+                document.getElementById('btnDeleteSelected')?.addEventListener('click', () => this.deleteSelectedMedia());
+                document.getElementById('btnDownloadSelectedImages')?.addEventListener('click', () => this
+                    .downloadSelectedImages());
+                document.getElementById('filterType')?.addEventListener('change', () => this.loadGallery());
 
-                const btnSwitchCamera = document.getElementById('btnSwitchCamera');
-                if (btnSwitchCamera) {
-                    btnSwitchCamera.addEventListener('click', async () => {
-                        const select = document.getElementById('cameraSelect');
-                        if (select && select.options.length > 1) {
-                            let nextIdx = select.selectedIndex + 1;
-                            if (nextIdx >= select.options.length) nextIdx = 1;
-                            select.selectedIndex = nextIdx;
-                            captureManager.currentDeviceId = select.value;
-                            captureManager.startCamera(select.value);
-                        }
-                    });
-                }
+                document.getElementById('btnSelectAllMedia')?.addEventListener('click', () => this.setAllCheckboxes(true));
+                document.getElementById('btnDeselectAllMedia')?.addEventListener('click', () => this.setAllCheckboxes(
+                false));
 
-                // Native inputs fallback
-                const nativePhotoInput = document.getElementById('nativePhotoInput');
-                if (nativePhotoInput) {
-                    nativePhotoInput.addEventListener('change', async (e) => {
-                        if (e.target.files && e.target.files[0]) {
-                            const file = e.target.files[0];
-                            const student = this.selectedStudent;
-                            if (!student) return;
-                            const settings = SettingsManager.get();
-                            const entry = await MediaPipeline.createMediaEntry(file, 'photo', student.name, settings);
-                            MediaPipeline.processAndSave(entry, settings);
-                        }
-                    });
-                }
+                document.getElementById('btnCancelProcessing')?.addEventListener('click', () => {
+                    if (VideoProcessingEngine.currentJobCancel) VideoProcessingEngine.currentJobCancel();
+                });
 
-                const nativeVideoInput = document.getElementById('nativeVideoInput');
-                if (nativeVideoInput) {
-                    nativeVideoInput.addEventListener('change', async (e) => {
-                        if (e.target.files && e.target.files[0]) {
-                            const file = e.target.files[0];
-                            const student = this.selectedStudent;
-                            if (!student) return;
-                            const settings = SettingsManager.get();
-                            const entry = await MediaPipeline.createMediaEntry(file, 'video', student.name, settings);
-                            MediaPipeline.processAndSave(entry, settings);
-                        }
-                    });
-                }
+                document.getElementById('closeImageModal')?.addEventListener('click', () => {
+                    document.getElementById('imageModal').classList.add('hidden');
+                });
 
-                // Student list bindings
-                const excelUpload = document.getElementById('excelUpload');
-                if (excelUpload) excelUpload.addEventListener('change', (e) => this.handleExcelUpload(e));
-
-                const btnDownloadSample = document.getElementById('btnDownloadSample');
-                if (btnDownloadSample) btnDownloadSample.addEventListener('click', () => this.downloadExcelSample());
-
-                const btnClearList = document.getElementById('btnClearList');
-                if (btnClearList) btnClearList.addEventListener('click', () => this.clearStudentList());
-
-                const btnAddManual = document.getElementById('btnAddManual');
-                if (btnAddManual) btnAddManual.addEventListener('click', () => this.addManualStudent());
-
-                const searchStudent = document.getElementById('searchStudent');
-                if (searchStudent) searchStudent.addEventListener('input', (e) => this.renderStudentList(e.target.value));
-
-                // Auth buttons
-                const btnLoginGoogle = document.getElementById('btnLoginGoogle');
-                if (btnLoginGoogle) btnLoginGoogle.addEventListener('click', () => Auth.signInWithGoogle());
-
-                const btnLogout = document.getElementById('btnLogout');
-                if (btnLogout) btnLogout.addEventListener('click', () => Auth.signOut());
-
-                // Gallery bindings
-                const filterType = document.getElementById('filterType');
-                if (filterType) filterType.addEventListener('change', () => this.loadGallery());
-
-                const btnToggleSelectMode = document.getElementById('btnToggleSelectMode');
-                if (btnToggleSelectMode) btnToggleSelectMode.addEventListener('click', () => this.toggleSelectMode());
-
-                const btnSelectAllMedia = document.getElementById('btnSelectAllMedia');
-                if (btnSelectAllMedia) btnSelectAllMedia.addEventListener('click', () => this.selectAllMedia());
-
-                const btnDeselectAllMedia = document.getElementById('btnDeselectAllMedia');
-                if (btnDeselectAllMedia) btnDeselectAllMedia.addEventListener('click', () => this.deselectAllMedia());
-
-                const btnDownloadSelectedImages = document.getElementById('btnDownloadSelectedImages');
-                if (btnDownloadSelectedImages) btnDownloadSelectedImages.addEventListener('click', () => this.downloadSelectedImages());
-
-                const btnExportSelected = document.getElementById('btnExportSelected');
-                if (btnExportSelected) btnExportSelected.addEventListener('click', () => this.exportSelectedZIP());
-
-                const btnDeleteSelected = document.getElementById('btnDeleteSelected');
-                if (btnDeleteSelected) btnDeleteSelected.addEventListener('click', () => this.deleteSelectedMedia());
-
-                // Modal close
-                const closeImageModal = document.getElementById('closeImageModal');
-                if (closeImageModal) closeImageModal.addEventListener('click', () => document.getElementById('imageModal').classList.add('hidden'));
-
-                const closeVideoModal = document.getElementById('closeVideoModal');
-                if (closeVideoModal) {
-                    closeVideoModal.addEventListener('click', () => {
-                        const vModal = document.getElementById('videoModal');
-                        const vEl = document.getElementById('modalVideo');
-                        if (vEl) vEl.pause();
-                        vModal.classList.add('hidden');
-                    });
-                }
-
-                // Settings UI bindings
-                const settingWatermark = document.getElementById('settingWatermark');
-                if (settingWatermark) settingWatermark.addEventListener('change', () => this.readSettingsFromUI());
-
-                const setUnitName = document.getElementById('setUnitName');
-                if (setUnitName) setUnitName.addEventListener('input', () => this.readSettingsFromUI());
-
-                const setShowUnit = document.getElementById('setShowUnit');
-                if (setShowUnit) setShowUnit.addEventListener('change', () => this.readSettingsFromUI());
-
-                const setShowDate = document.getElementById('setShowDate');
-                if (setShowDate) setShowDate.addEventListener('change', () => this.readSettingsFromUI());
-
-                const setShowLocation = document.getElementById('setShowLocation');
-                if (setShowLocation) setShowLocation.addEventListener('change', () => this.readSettingsFromUI());
-
-                const setPosition = document.getElementById('setPosition');
-                if (setPosition) setPosition.addEventListener('change', () => this.readSettingsFromUI());
-
-                const setAlign = document.getElementById('setAlign');
-                if (setAlign) setAlign.addEventListener('change', () => this.readSettingsFromUI());
-
-                const setFontSize = document.getElementById('setFontSize');
-                if (setFontSize) setFontSize.addEventListener('input', () => this.readSettingsFromUI());
-
-                const setColor = document.getElementById('setColor');
-                if (setColor) setColor.addEventListener('input', () => this.readSettingsFromUI());
-
-                const setBgColor = document.getElementById('setBgColor');
-                if (setBgColor) setBgColor.addEventListener('input', () => this.readSettingsFromUI());
-
-                const setShadow = document.getElementById('setShadow');
-                if (setShadow) setShadow.addEventListener('change', () => this.readSettingsFromUI());
-
-                const btnSaveSettings = document.getElementById('btnSaveSettings');
-                if (btnSaveSettings) btnSaveSettings.addEventListener('click', () => this.saveSettingsUI());
-
-                // Cancel processing button
-                const btnCancelProcessing = document.getElementById('btnCancelProcessing');
-                if (btnCancelProcessing) {
-                    btnCancelProcessing.addEventListener('click', () => {
-                        if (VideoProcessingEngine.currentJobCancel) {
-                            VideoProcessingEngine.currentJobCancel();
-                            VideoProcessingEngine.hideProgress();
-                            Utils.showToast("Đã hủy xử lý video");
-                        }
-                    });
-                }
+                document.getElementById('closeVideoModal')?.addEventListener('click', () => {
+                    const m = document.getElementById('videoModal');
+                    const v = document.getElementById('modalVideo');
+                    m.classList.add('hidden');
+                    v.pause();
+                    v.src = '';
+                });
             },
 
-            switchTab(targetTabId) {
+            async switchTab(targetTabId, isInitialLoad = false) {
                 this.activeTab = targetTabId;
+                db.setSetting('lastActiveTab', targetTabId);
 
-                document.querySelectorAll('.bottom-nav .nav-btn').forEach(btn => {
-                    if (btn.getAttribute('data-target') === targetTabId) {
-                        btn.classList.add('active');
-                    } else {
-                        btn.classList.remove('active');
-                    }
-                });
+                document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
 
-                document.querySelectorAll('.tab-content').forEach(tab => {
-                    if (tab.id === targetTabId) {
-                        tab.classList.add('active');
-                    } else {
-                        tab.classList.remove('active');
-                    }
-                });
+                document.querySelector(`.nav-btn[data-target="${targetTabId}"]`)?.classList.add('active');
+                document.getElementById(targetTabId)?.classList.add('active');
 
                 if (targetTabId === 'tab-camera') {
-                    document.body.classList.add('camera-fullscreen');
-                    captureManager.startCamera();
+                    if (this.captureManager.capabilities.hasGetUserMedia) {
+                        document.body.classList.add('camera-fullscreen');
+                        this.captureManager.startCamera(this.captureManager.currentDeviceId);
+                    }
+                    if (SettingsManager.get('showLocation')) LocationService.updateLocation();
                 } else {
                     document.body.classList.remove('camera-fullscreen');
-                    captureManager.stopCamera();
+                    this.captureManager.stopCamera();
                 }
 
-                if (targetTabId === 'tab-gallery') {
-                    this.loadGallery();
+                if (targetTabId === 'tab-gallery') this.loadGallery();
+                if (targetTabId === 'tab-settings') LocationService.updateUIStatus();
+            },
+
+            async handleCapturePhoto() {
+                if (!this.currentStudent) {
+                    Utils.showToast("Vui lòng chọn học sinh trước khi chụp!");
+                    this.switchTab('tab-list');
+                    return;
                 }
 
-                if (targetTabId === 'tab-settings') {
-                    this.loadSettingsToUI();
+                if (!this.captureManager.capabilities.hasGetUserMedia) {
+                    const input = document.getElementById('nativePhotoInput');
+                    if (input) { input.value = '';
+                        input.click(); }
+                    return;
+                }
+
+                try {
+                    const settings = SettingsManager.get();
+                    const blob = await this.captureManager.capturePhoto(this.currentStudent.name, settings);
+                    const mediaEntry = await MediaPipeline.createMediaEntry(blob, 'photo', this.currentStudent.name,
+                    { enabled: false });
+                    mediaEntry.processedBlob = blob;
+                    mediaEntry.watermarkApplied = settings.enabled;
+                    mediaEntry.processingStatus = 'success';
+                    await db.saveMedia(mediaEntry);
+
+                    Utils.showToast(`Đã lưu ảnh: ${this.currentStudent.name}`);
+                    if (Auth.currentUser) SyncManager.uploadSingleMedia(mediaEntry);
+                } catch (err) {
+                    Logger.error('App', 'Lỗi chụp ảnh', err);
+                    Utils.showToast("Lỗi chụp ảnh!");
                 }
             },
 
-            async loadStudentList() {
-                this.students = await db.getStudents();
-                if (this.students.length > 0 && !this.selectedStudent) {
-                    this.selectedStudent = this.students[0];
+            async handleRecordVideo() {
+                if (!this.currentStudent) {
+                    Utils.showToast("Vui lòng chọn học sinh!");
+                    this.switchTab('tab-list');
+                    return;
                 }
-                this.updateHeaderStudent();
-                this.renderStudentList();
+
+                if (!this.captureManager.capabilities.hasGetUserMedia) {
+                    const input = document.getElementById('nativeVideoInput');
+                    if (input) { input.value = '';
+                        input.click(); }
+                    return;
+                }
+
+                if (this.captureManager.isRecording) {
+                    this.captureManager.stopRecording();
+                } else {
+                    this.captureManager.startRecording(this.currentStudent.name, SettingsManager.get());
+                }
             },
 
-            renderStudentList(filterText = '') {
-                const listEl = document.getElementById('studentList');
-                if (!listEl) return;
-                listEl.innerHTML = '';
+            async handleNativeFileInput(e, type) {
+                const file = e.target.files[0];
+                e.target.value = '';
+                if (!file) return;
 
-                const filter = filterText.toLowerCase().trim();
-                const filtered = this.students.filter(s => s.name.toLowerCase().includes(filter));
+                if (!this.currentStudent) {
+                    Utils.showToast("Vui lòng chọn học sinh!");
+                    this.switchTab('tab-list');
+                    return;
+                }
 
-                filtered.forEach(student => {
-                    const li = document.createElement('li');
-                    if (this.selectedStudent && this.selectedStudent.id === student.id) {
-                        li.classList.add('selected');
-                    }
-                    li.textContent = student.name;
-                    li.addEventListener('click', () => {
-                        this.selectedStudent = student;
-                        this.updateHeaderStudent();
-                        this.renderStudentList(filterText);
-                        Utils.showToast(`Đã chọn: ${student.name}`);
-                    });
-                    listEl.appendChild(li);
-                });
+                Utils.showToast(`Đang tiếp nhận ${type === 'photo' ? 'ảnh' : 'video'} gốc...`);
+                try {
+                    const settings = SettingsManager.get();
+                    const entry = await MediaPipeline.createMediaEntry(file, type, this.currentStudent.name, settings);
+                    await MediaPipeline.processAndSave(entry, settings);
+                } catch (err) {
+                    Logger.error('App', 'Lỗi xử lý file camera thiết bị', err);
+                    Utils.showToast("Lỗi xử lý file từ Camera!");
+                }
             },
 
-            updateHeaderStudent() {
-                const headerEl = document.getElementById('headerStudentName');
-                if (headerEl) {
-                    headerEl.textContent = this.selectedStudent ? `Học sinh: ${this.selectedStudent.name}` : 'Chưa chọn học sinh';
-                }
+            handleExcelImport(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = async (evt) => {
+                    try {
+                        const workbook = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
+                        const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                        if (json.length === 0) { Utils.showToast("File Excel rỗng!"); return; }
+                        const keys = Object.keys(json[0]);
+                        const nameKey = keys.find(k => k.toLowerCase().includes('tên') || k.toLowerCase().includes(
+                            'name')) || keys[1] || keys[0];
+                        const newStudents = json.map((row, idx) => ({
+                            id: (Date.now() + idx).toString(),
+                            name: String(row[nameKey] || '').trim(),
+                            class: String(row['Lớp'] || row['Class'] || '').trim()
+                        })).filter(s => s.name);
+
+                        await db.saveStudents(newStudents);
+                        Utils.showToast(`Đã nhập ${newStudents.length} học sinh!`);
+                        e.target.value = '';
+                        this.loadStudentList();
+                    } catch (err) { Utils.showToast("Lỗi đọc File Excel!"); }
+                };
+                reader.readAsArrayBuffer(file);
+            },
+
+            downloadSampleExcel() {
+                const sampleData = [{ "STT": 1, "Họ và tên": "Nguyễn Văn An", "Lớp": "10A1" }];
+                const ws = XLSX.utils.json_to_sheet(sampleData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Danh_sach_mau");
+                XLSX.writeFile(wb, "Danh_Sach_Hoc_Sinh_Mau.xlsx");
             },
 
             async addManualStudent() {
                 const input = document.getElementById('manualName');
-                if (!input || !input.value.trim()) return;
                 const name = input.value.trim();
-                const newStudent = { id: Date.now().toString(), name };
-                this.students.push(newStudent);
+                if (!name) return Utils.showToast("Nhập họ tên!");
+                const newStudent = { id: Date.now().toString(), name, class: '' };
                 await db.saveStudents([newStudent]);
                 input.value = '';
-                if (!this.selectedStudent) this.selectedStudent = newStudent;
-                this.updateHeaderStudent();
-                this.renderStudentList();
+                input.focus();
+                this.loadStudentList();
                 Utils.showToast(`Đã thêm: ${name}`);
             },
 
-            async handleExcelUpload(e) {
-                const file = e.target.files[0];
-                if (!file) return;
-                try {
-                    const reader = new FileReader();
-                    reader.onload = async (evt) => {
-                        const data = new Uint8Array(evt.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                        const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-
-                        const newStudents = [];
-                        rows.forEach((row, idx) => {
-                            if (row && row.length > 0 && row[0]) {
-                                const val = String(row[0]).trim();
-                                if (val && val.toLowerCase() !== 'họ và tên' && val.toLowerCase() !== 'ho ten') {
-                                    newStudents.push({ id: `${Date.now()}_${idx}`, name: val });
-                                }
-                            }
-                        });
-
-                        if (newStudents.length > 0) {
-                            this.students = [...this.students, ...newStudents];
-                            await db.saveStudents(newStudents);
-                            if (!this.selectedStudent) this.selectedStudent = this.students[0];
-                            this.updateHeaderStudent();
-                            this.renderStudentList();
-                            Utils.showToast(`Đã nhập ${newStudents.length} học sinh từ Excel!`);
-                        }
-                    };
-                    reader.readAsArrayBuffer(file);
-                } catch (err) {
-                    Utils.showToast("Lỗi đọc file Excel!");
-                }
-            },
-
-            downloadExcelSample() {
-                const wsData = [
-                    ['Họ và Tên'],
-                    ['Nguyễn Văn A'],
-                    ['Trần Thị B'],
-                    ['Lê Văn C']
-                ];
-                const ws = XLSX.utils.aoa_to_sheet(wsData);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "DanhSach");
-                XLSX.writeFile(wb, "Danh_Sach_Hoc_Sinh_Mau.xlsx");
-            },
-
-            async clearStudentList() {
-                if (confirm("Bạn có chắc chắn muốn xóa toàn bộ danh sách học sinh?")) {
+            async clearStudents() {
+                if (confirm("Xóa toàn bộ danh sách học sinh?")) {
                     await db.clearStudents();
-                    this.students = [];
-                    this.selectedStudent = null;
-                    this.updateHeaderStudent();
-                    this.renderStudentList();
-                    Utils.showToast("Đã xóa danh sách học sinh!");
+                    this.currentStudent = null;
+                    await db.setSetting('lastSelectedStudentId', null);
+                    document.getElementById('headerStudentName').textContent = "Chưa chọn học sinh";
+                    this.loadStudentList();
                 }
             },
 
-            async loadGallery() {
-                const grid = document.getElementById('galleryGrid');
-                if (!grid) return;
-                grid.innerHTML = '';
-
-                const filterType = document.getElementById('filterType') ? document.getElementById('filterType').value : 'all';
-                let mediaList = await db.getAllMedia();
-
-                if (filterType === 'photo') {
-                    mediaList = mediaList.filter(m => m.type === 'photo');
-                } else if (filterType === 'video') {
-                    mediaList = mediaList.filter(m => m.type === 'video');
-                }
-
-                if (mediaList.length === 0) {
-                    grid.innerHTML = '<p class="text-muted text-sm" style="grid-column: 1/-1; text-align: center; padding: 30px;">Thư viện trống.</p>';
+            async loadStudentList(filterText = '') {
+                const list = await db.getStudents();
+                const ul = document.getElementById('studentList');
+                ul.innerHTML = '';
+                const filtered = list.filter(s => s.name.toLowerCase().includes(filterText.toLowerCase()));
+                if (filtered.length === 0) {
+                    ul.innerHTML = '<li style="justify-content:center; color:#888;">Chưa có dữ liệu</li>';
                     return;
                 }
 
-                mediaList.forEach(item => {
-                    const card = document.createElement('div');
-                    card.className = 'gallery-item';
-
-                    const targetBlob = item.processedBlob || item.originalBlob || item.blob;
-                    const url = ObjectURLManager.create(targetBlob);
-
-                    if (this.isSelectMode) {
-                        const chk = document.createElement('input');
-                        chk.type = 'checkbox';
-                        chk.className = 'gallery-checkbox';
-                        chk.checked = this.selectedMediaIds.has(item.id);
-                        chk.addEventListener('change', (e) => {
-                            if (e.target.checked) this.selectedMediaIds.add(item.id);
-                            else this.selectedMediaIds.delete(item.id);
-                            this.updateSelectionUI();
-                        });
-                        card.appendChild(chk);
-                    }
-
-                    const badgesDiv = document.createElement('div');
-                    badgesDiv.className = 'gallery-badges';
-
-                    if (item.sync_status) {
-                        const syncBadge = document.createElement('span');
-                        syncBadge.className = `badge sync-badge ${item.sync_status === 'synced' ? 'synced' : 'pending'}`;
-                        syncBadge.innerHTML = item.sync_status === 'synced' ? '<i class="fa-solid fa-cloud-check"></i>' : '<i class="fa-solid fa-cloud-arrow-up"></i>';
-                        badgesDiv.appendChild(syncBadge);
-                    }
-
-                    if (item.processingStatus === 'failed') {
-                        const failBadge = document.createElement('button');
-                        failBadge.className = 'badge status-badge failed';
-                        failBadge.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Thử lại';
-                        failBadge.title = 'Lỗi watermark. Nhấn để thử lại.';
-                        failBadge.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            MediaPipeline.processAndSave(item, SettingsManager.get());
-                        });
-                        badgesDiv.appendChild(failBadge);
-                    }
-
-                    card.appendChild(badgesDiv);
-
-                    if (item.type === 'photo') {
-                        const img = document.createElement('img');
-                        img.src = url;
-                        img.addEventListener('click', () => {
-                            if (this.isSelectMode) return;
-                            const modal = document.getElementById('imageModal');
-                            const mImg = document.getElementById('modalImg');
-                            const mCap = document.getElementById('modalCaption');
-                            if (modal && mImg) {
-                                mImg.src = url;
-                                if (mCap) mCap.textContent = `${item.studentName} - ${item.fileName}`;
-                                modal.classList.remove('hidden');
-                            }
-                        });
-                        card.appendChild(img);
-                    } else {
-                        const vid = document.createElement('video');
-                        vid.src = url;
-                        vid.muted = true;
-                        vid.preload = 'metadata';
-                        vid.addEventListener('click', () => {
-                            if (this.isSelectMode) return;
-                            const modal = document.getElementById('videoModal');
-                            const mVid = document.getElementById('modalVideo');
-                            const mCap = document.getElementById('modalVideoCaption');
-                            if (modal && mVid) {
-                                mVid.src = url;
-                                if (mCap) mCap.textContent = `${item.studentName} - ${item.fileName}`;
-                                modal.classList.remove('hidden');
-                                mVid.play();
-                            }
-                        });
-                        card.appendChild(vid);
-                    }
-
-                    const info = document.createElement('div');
-                    info.className = 'gallery-info';
-                    info.innerHTML = `<strong>${item.studentName}</strong><span class="file-meta">${new Date(item.timestamp).toLocaleTimeString()}</span>`;
-                    card.appendChild(info);
-
-                    grid.appendChild(card);
+                filtered.forEach(student => {
+                    const li = document.createElement('li');
+                    if (this.currentStudent?.id === student.id) li.classList.add('selected');
+                    li.innerHTML =
+                        `<span><strong>${student.name}</strong> ${student.class ? `(${student.class})` : ''}</span>
+                                <i class="fa-solid fa-circle-check" style="color: ${this.currentStudent?.id === student.id ? '#007bff' : '#555'}"></i>`;
+                    li.addEventListener('click', () => {
+                        this.currentStudent = student;
+                        db.setSetting('lastSelectedStudentId', student.id);
+                        document.getElementById('headerStudentName').textContent = student.name;
+                        this.loadStudentList(filterText);
+                        this.switchTab('tab-camera');
+                    });
+                    ul.appendChild(li);
                 });
             },
 
             toggleSelectMode() {
                 this.isSelectMode = !this.isSelectMode;
-                this.selectedMediaIds.clear();
-                const bar = document.getElementById('selectionActionBar');
-                if (bar) {
-                    if (this.isSelectMode) bar.classList.remove('hidden');
-                    else bar.classList.add('hidden');
+                const actionBar = document.getElementById('selectionActionBar');
+                const toggleBtn = document.getElementById('btnToggleSelectMode');
+
+                if (this.isSelectMode) {
+                    actionBar.classList.remove('hidden');
+                    toggleBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Hủy chọn nhiều';
+                    toggleBtn.classList.replace('btn-secondary', 'btn-danger');
+                } else {
+                    actionBar.classList.add('hidden');
+                    toggleBtn.innerHTML = '<i class="fa-solid fa-square-check"></i> Chọn nhiều';
+                    toggleBtn.classList.replace('btn-danger', 'btn-secondary');
+                    this.setAllCheckboxes(false);
                 }
-                this.updateSelectionUI();
                 this.loadGallery();
             },
 
-            updateSelectionUI() {
-                const text = document.getElementById('selectedCountText');
-                if (text) text.textContent = `Đã chọn: ${this.selectedMediaIds.size}`;
+            updateSelectedCount() {
+                const checkedBoxes = document.querySelectorAll('.gallery-checkbox:checked');
+                const countText = document.getElementById('selectedCountText');
+                if (countText) countText.textContent = `Đã chọn: ${checkedBoxes.length}`;
             },
 
-            async selectAllMedia() {
-                const mediaList = await db.getAllMedia();
-                mediaList.forEach(m => this.selectedMediaIds.add(m.id));
-                this.updateSelectionUI();
-                this.loadGallery();
+            setAllCheckboxes(select) {
+                const filter = document.getElementById('filterType').value;
+                const checkboxes = document.querySelectorAll('.gallery-checkbox');
+                checkboxes.forEach(cb => {
+                    if (filter === 'photo' && cb.dataset.type !== 'photo') return;
+                    if (filter === 'video' && cb.dataset.type !== 'video') return;
+                    cb.checked = select;
+                });
+                this.updateSelectedCount();
             },
 
-            deselectAllMedia() {
-                this.selectedMediaIds.clear();
-                this.updateSelectionUI();
-                this.loadGallery();
+            getSelectedGalleryItems() {
+                const checkedBoxes = document.querySelectorAll('.gallery-checkbox:checked');
+                const items = [];
+                checkedBoxes.forEach(cb => {
+                    if (cb._mediaObject) items.push(cb._mediaObject);
+                });
+                return items;
+            },
+
+            async loadGallery() {
+                ObjectURLManager.revokeAll();
+
+                const filter = document.getElementById('filterType').value;
+                let list = await db.getAllMedia();
+                if (filter !== 'all') list = list.filter(m => m.type === filter);
+                const grid = document.getElementById('galleryGrid');
+                grid.innerHTML = '';
+
+                if (list.length === 0) {
+                    grid.innerHTML =
+                        '<p style="grid-column: 1/-1; text-align: center; color: #888; padding: 30px;">Chưa có file media nào</p>';
+                    this.updateSelectedCount();
+                    return;
+                }
+
+                list.forEach(media => {
+                    const item = document.createElement('div');
+                    item.className = 'gallery-item';
+
+                    const activeBlob = media.processedBlob || media.originalBlob || media.blob;
+                    const url = ObjectURLManager.create(activeBlob);
+
+                    const syncBadge = media.sync_status === 'synced' ?
+                        '<span class="badge sync-badge synced" title="Đã đồng bộ"><i class="fa-solid fa-cloud-check"></i></span>' :
+                        '<span class="badge sync-badge pending" title="Chờ đồng bộ"><i class="fa-solid fa-cloud-arrow-up"></i></span>';
+
+                    let statusBadge = '';
+                    if (media.processingStatus === 'failed') {
+                        statusBadge =
+                            `<button class="badge status-badge failed btn-retry-watermark" data-id="${media.id}" title="Xử lý thất bại. Nhấn để thử lại"><i class="fa-solid fa-triangle-exclamation"></i> Thử lại</button>`;
+                    } else if (media.watermarkApplied) {
+                        statusBadge =
+                            `<span class="badge status-badge wm-active" title="Đã in Watermark"><i class="fa-solid fa-stamp"></i> WM</span>`;
+                    }
+
+                    const mediaTag = media.type === 'photo' ?
+                        `<img src="${url}" alt="photo" loading="lazy">` :
+                        `<video src="${url}" preload="metadata" playsinline></video>`;
+
+                    const checkboxDisplay = this.isSelectMode ? '' : 'style="display: none;"';
+
+                    item.innerHTML = `
+                                <input type="checkbox" class="gallery-checkbox" data-id="${media.id}" data-type="${media.type}" ${checkboxDisplay}>
+                                <div class="gallery-badges">${syncBadge} ${statusBadge}</div>
+                                ${mediaTag}
+                                <div class="gallery-info">
+                                    <strong>${media.studentName}</strong>
+                                    <span class="file-meta">${media.type.toUpperCase()} • ${Math.round((activeBlob ? activeBlob.size : 0) / 1024 / 1024 * 10) / 10} MB</span>
+                                </div>`;
+
+                    const cb = item.querySelector('.gallery-checkbox');
+                    cb._mediaObject = media;
+                    cb.addEventListener('change', () => this.updateSelectedCount());
+
+                    const retryBtn = item.querySelector('.btn-retry-watermark');
+                    if (retryBtn) {
+                        retryBtn.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            Utils.showToast("Đang thử lại xử lý watermark...");
+                            await MediaPipeline.processAndSave(media, SettingsManager.get());
+                        });
+                    }
+
+                    const mediaEl = item.querySelector('img, video');
+                    if (mediaEl) {
+                        mediaEl.addEventListener('click', () => {
+                            if (this.isSelectMode) {
+                                cb.checked = !cb.checked;
+                                this.updateSelectedCount();
+                            } else {
+                                this.viewMedia(url, media.type, media.fileName);
+                            }
+                        });
+                    }
+                    grid.appendChild(item);
+                });
+                this.updateSelectedCount();
+            },
+
+            viewMedia(url, type, fileName) {
+                if (type === 'photo') {
+                    document.getElementById('modalImg').src = url;
+                    document.getElementById('modalCaption').textContent = fileName;
+                    document.getElementById('imageModal').classList.remove('hidden');
+                } else {
+                    const v = document.getElementById('modalVideo');
+                    v.src = url;
+                    document.getElementById('modalVideoCaption').textContent = fileName;
+                    document.getElementById('videoModal').classList.remove('hidden');
+                    v.play();
+                }
             },
 
             async downloadSelectedImages() {
-                if (this.selectedMediaIds.size === 0) {
-                    Utils.showToast("Chưa chọn tệp nào!");
-                    return;
+                const selectedImages = this.getSelectedGalleryItems().filter(item => item.type === 'photo');
+                if (!selectedImages.length) { Utils.showToast('Vui lòng chọn ít nhất một ảnh!'); return; }
+
+                let successCount = 0;
+                Utils.showToast(`Đang tải ${selectedImages.length} ảnh...`);
+
+                for (let i = 0; i < selectedImages.length; i++) {
+                    const item = selectedImages[i];
+                    const targetBlob = item.processedBlob || item.originalBlob || item.blob;
+                    if (!targetBlob) continue;
+
+                    const url = ObjectURLManager.create(targetBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = item.fileName || `image_${Date.now()}.jpg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    setTimeout(() => ObjectURLManager.revoke(url), 1000);
+                    successCount++;
+                    await new Promise(res => setTimeout(res, 250));
                 }
-                const ids = Array.from(this.selectedMediaIds);
-                for (const id of ids) {
-                    const item = await db.getMediaById(id);
-                    if (item) {
-                        const targetBlob = item.processedBlob || item.originalBlob || item.blob;
-                        saveAs(targetBlob, item.fileName);
-                    }
-                }
+                Utils.showToast(`✅ Đã tải ${successCount} ảnh.`);
             },
 
-            async exportSelectedZIP() {
-                if (this.selectedMediaIds.size === 0) {
-                    Utils.showToast("Chưa chọn tệp nào!");
-                    return;
-                }
-                try {
-                    Utils.showToast("Đang nén ZIP...");
-                    const zip = new JSZip();
-                    const ids = Array.from(this.selectedMediaIds);
+            async exportSelectedMedia() {
+                const cbs = document.querySelectorAll('.gallery-checkbox:checked');
+                if (cbs.length === 0) return Utils.showToast("Chọn ít nhất 1 file!");
+                Utils.showToast("Đang nén file ZIP...");
 
-                    for (const id of ids) {
-                        const item = await db.getMediaById(id);
-                        if (item) {
-                            const targetBlob = item.processedBlob || item.originalBlob || item.blob;
-                            const folder = zip.folder(Utils.removeVietnameseTones(item.studentName));
-                            folder.file(item.fileName, targetBlob);
-                        }
+                const zip = new JSZip();
+                const items = this.getSelectedGalleryItems();
+
+                for (const m of items) {
+                    const activeBlob = m.processedBlob || m.originalBlob || m.blob;
+                    if (activeBlob) {
+                        zip.file(m.fileName, activeBlob);
                     }
-
-                    const content = await zip.generateAsync({ type: 'blob' });
-                    saveAs(content, `Media_Export_${Utils.formatDateForFile(Date.now())}.zip`);
-                    Utils.showToast("Đã xuất tệp ZIP!");
-                } catch (err) {
-                    Logger.error('Gallery', 'ZIP Export error', err);
-                    Utils.showToast("Lỗi khi tạo file ZIP!");
                 }
+
+                const content = await zip.generateAsync({ type: 'blob' });
+                saveAs(content, `Media_Studio_${Utils.formatDateForFile(Date.now())}.zip`);
+                Utils.showToast("Đã xuất tệp ZIP thành công!");
             },
 
             async deleteSelectedMedia() {
-                if (this.selectedMediaIds.size === 0) {
-                    Utils.showToast("Chưa chọn tệp nào!");
-                    return;
+                const cbs = document.querySelectorAll('.gallery-checkbox:checked');
+                if (cbs.length === 0 || !confirm(`Xóa vĩnh viễn ${cbs.length} file đã chọn?`)) return;
+
+                const items = this.getSelectedGalleryItems();
+                const ids = items.map(m => m.id);
+
+                for (const m of items) {
+                    if (Auth.currentUser && m.file_path) {
+                        try {
+                            await supabaseClient.storage.from('media').remove([m.file_path]);
+                            await supabaseClient.from('media_files').delete().eq('file_path', m.file_path);
+                        } catch (e) { /* ignore */ }
+                    }
                 }
-                if (confirm(`Bạn có chắc muốn xóa ${this.selectedMediaIds.size} tệp đã chọn?`)) {
-                    const ids = Array.from(this.selectedMediaIds);
-                    await db.deleteMedia(ids);
-                    this.selectedMediaIds.clear();
-                    this.updateSelectionUI();
-                    this.loadGallery();
-                    Utils.showToast("Đã xóa các tệp đã chọn!");
-                }
-            },
 
-            loadSettingsToUI() {
-                const s = SettingsManager.get();
-                const setEl = (id, val, isChk = false) => {
-                    const el = document.getElementById(id);
-                    if (!el) return;
-                    if (isChk) el.checked = !!val;
-                    else el.value = val;
-                };
-
-                setEl('settingWatermark', s.enabled, true);
-                setEl('setUnitName', s.unitName);
-                setEl('setShowUnit', s.showUnit, true);
-                setEl('setShowDate', s.showDate, true);
-                setEl('setShowLocation', s.showLocation, true);
-                setEl('setPosition', s.position);
-                setEl('setAlign', s.align);
-                setEl('setFontSize', s.fontSize);
-                setEl('setColor', s.color);
-                setEl('setBgColor', s.bgColor);
-                setEl('setShadow', s.shadow, true);
-
-                LocationService.updateUIStatus();
-            },
-
-            readSettingsFromUI() {
-                const getEl = (id, isChk = false) => {
-                    const el = document.getElementById(id);
-                    if (!el) return isChk ? false : '';
-                    return isChk ? el.checked : el.value;
-                };
-
-                const newSettings = {
-                    enabled: getEl('settingWatermark', true),
-                    unitName: getEl('setUnitName'),
-                    showUnit: getEl('setShowUnit', true),
-                    showDate: getEl('setShowDate', true),
-                    showLocation: getEl('setShowLocation', true),
-                    position: getEl('setPosition'),
-                    align: getEl('setAlign'),
-                    fontSize: parseInt(getEl('setFontSize')) || 16,
-                    color: getEl('setColor'),
-                    bgColor: getEl('setBgColor'),
-                    shadow: getEl('setShadow', true)
-                };
-
-                SettingsManager.update(newSettings);
-            },
-
-            async saveSettingsUI() {
-                this.readSettingsFromUI();
-                await SettingsManager.save(true);
-                Utils.showToast("Đã lưu cấu hình watermark!");
+                await db.deleteMedia(ids);
+                await this.loadGallery();
+                Utils.showToast("Đã xóa media thành công!");
             }
         };
 
         window.addEventListener('DOMContentLoaded', () => {
-            App.init();
+            if (!window.appInitialized) {
+                window.appInitialized = true;
+                App.init();
+            }
         });
     </script>
 </body>
