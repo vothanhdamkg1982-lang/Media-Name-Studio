@@ -2485,59 +2485,68 @@ body.camera-fullscreen .app-main {
         const desktopZone = document.getElementById('desktopCameraZone');
         const mobileZone = document.getElementById('mobileCameraZone');
         const controlsPanel = document.getElementById('cameraControlsPanel');
+        
+        // 1. Lấy phần tử chứa thanh menu (Bạn thay bằng ID hoặc class thực tế của thanh menu trong HTML)
+        // Ví dụ nếu nó có id là "appNavigation" hoặc class là ".bottom-nav"
+        const menuBar = document.getElementById('appNavigation') || document.querySelector('.bottom-nav, nav');
 
         if (!this.capabilities.hasGetUserMedia) {
             if (desktopZone) desktopZone.style.display = 'none';
             if (mobileZone) mobileZone.classList.remove('hidden');
             if (controlsPanel) controlsPanel.classList.add('hidden');
+            if (menuBar) menuBar.classList.add('hidden');
         } else {
             if (desktopZone) desktopZone.style.display = 'flex';
             if (mobileZone) mobileZone.classList.add('hidden');
             if (controlsPanel) controlsPanel.classList.remove('hidden');
+            if (menuBar) menuBar.classList.remove('hidden');
         }
 
-        // === XỬ LÝ ẨN/HIỆN TOGGLE (CHẠM ĐỂ HIỆN / CHẠM ĐỂ ẨN) ===
-        if (controlsPanel) {
+        // === XỬ LÝ ẨN/HIỆN ĐỒNG THỜI CẢ THANH ZOOM VÀ THANH MENU ===
+        if (controlsPanel || menuBar) {
             let hideTimer = null;
 
-            // Hàm hiện thanh điều khiển và tự ẩn sau 3 giây
-            const showControls = () => {
-                controlsPanel.classList.remove('hidden');
+            // Hàm hiện cả thanh điều khiển và thanh menu
+            const showElements = () => {
+                if (controlsPanel) controlsPanel.classList.remove('hidden');
+                if (menuBar) menuBar.classList.remove('hidden');
+
                 if (hideTimer) clearTimeout(hideTimer);
                 hideTimer = setTimeout(() => {
-                    controlsPanel.classList.add('hidden');
-                }, 3000);
+                    if (controlsPanel) controlsPanel.classList.add('hidden');
+                    if (menuBar) menuBar.classList.add('hidden');
+                }, 3000); // Sau 3 giây tự động ẩn cả hai
             };
 
-            // Hàm ẩn thanh điều khiển ngay lập tức
-            const hideControls = () => {
-                controlsPanel.classList.add('hidden');
+            // Hàm ẩn ngay lập tức cả hai
+            const hideElements = () => {
+                if (controlsPanel) controlsPanel.classList.add('hidden');
+                if (menuBar) menuBar.classList.add('hidden');
                 if (hideTimer) clearTimeout(hideTimer);
             };
 
-            // Lắng nghe sự kiện trên toàn bộ document để không bị lỗi do thẻ video/canvas che khuất
+            // Lắng nghe sự kiện chạm trên màn hình
             document.addEventListener('pointerdown', (e) => {
-                // Xác định vùng camera đang hoạt động (desktop hoặc mobile)
                 const activeCameraZone = (desktopZone && desktopZone.style.display !== 'none') ? desktopZone : mobileZone;
                 
                 // Nếu bấm ngoài vùng camera thì bỏ qua
                 if (!activeCameraZone || !activeCameraZone.contains(e.target)) return;
 
-                // Nếu bấm trực tiếp vào các nút/thanh trượt trong bảng điều khiển thì để mặc định cho nút chạy
-                if (e.target.closest('#cameraControlsPanel')) return;
+                // Nếu bấm vào các nút điều khiển hoặc bấm trực tiếp vào thanh menu thì không làm ẩn/hiện bất thường
+                if (e.target.closest('#cameraControlsPanel') || (menuBar && e.target.closest(menuBar.tagName))) return;
 
-                // Cơ chế Toggle: 
-                // Nếu đang ẩn -> Bấm vào màn hình camera sẽ HIỆN lên
-                // Nếu đang hiện -> Bấm vào màn hình camera sẽ ẨN đi ngay lập tức
-                if (controlsPanel.classList.contains('hidden')) {
-                    showControls();
+                // Cơ chế Toggle: Đang ẩn thì chạm để hiện, đang hiện thì chạm để ẩn ngay
+                const isHidden = (controlsPanel && controlsPanel.classList.contains('hidden')) || (menuBar && menuBar.classList.contains('hidden'));
+
+                if (isHidden) {
+                    showElements();
                 } else {
-                    hideControls();
+                    hideElements();
                 }
             });
 
-            // Tự động ẩn sau 3 giây khi mới vừa mở camera lần đầu
-            showControls();
+            // Tự động đếm ngược ẩn khi mở app lần đầu
+            showElements();
         }
         // =======================================================
     }
