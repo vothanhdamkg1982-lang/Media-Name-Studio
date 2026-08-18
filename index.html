@@ -70,6 +70,9 @@
                                 <option value="">-- Camera --</option>
                             </select>
                         </div>
+                        <button id="btnTorchToggle" class="btn-icon-control hidden" title="Bật/Tắt Flash">
+                            <i class="fa-solid fa-bolt"></i>
+                        </button>
                         <div class="control-group vertical-group" title="Tăng giảm độ sáng">
                             <i class="fa-solid fa-sun icon-bright"></i>
                             <input type="range" id="brightnessRange" class="vertical-slider" min="0.5" max="2.8" step="0.1" value="1">
@@ -90,7 +93,7 @@
 
                     <button type="button" class="btn btn-action btn-capture-main" id="btnCapturePhoto" title="Chụp ảnh">
                         <div class="capture-ring"></div>
-                        <span class="btn-label">CHỤP ẢNH</span>
+                        <span class="btn-label">CHỤP ÁNH</span>
                     </button>
 
                     <button type="button" class="btn btn-action btn-record" id="btnRecordVideo" title="Quay video">
@@ -161,7 +164,7 @@
 
         <section id="tab-settings" class="tab-content">
             <div class="panel">
-                <h2>Cài đặt Watermark</h2>
+                <h2>Cài đặt Watermark <span id="autoSaveIndicator" class="auto-save-status"><i class="fa-solid fa-check"></i> Tự động lưu</span></h2>
                 <div class="form-group checkbox-group highlight-box">
                     <label><input type="checkbox" id="settingWatermark"> In tên và ngày chụp vào ảnh/video</label>
                 </div>
@@ -216,7 +219,7 @@
                     </div>
                 </div>
                 <button id="btnSaveSettings" class="btn btn-primary w-100 btn-large mt-3">
-                    <i class="fa-solid fa-floppy-disk"></i> LƯU CẤU HÌNH
+                    <i class="fa-solid fa-floppy-disk"></i> LƯU CẤU HÌNH (ĐÃ TỰ ĐỘNG LƯU)
                 </button>
             </div>
         </section>

@@ -11,6 +11,14 @@ if (window.supabase) {
     supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
+class AppError extends Error {
+    constructor(category, message, originalError = null) {
+        super(message);
+        this.name = category;
+        this.originalError = originalError;
+    }
+}
+
 const Logger = {
     debugMode: true,
     camera(...args) { if (this.debugMode) console.log('[Camera]', ...args); },
@@ -18,7 +26,28 @@ const Logger = {
     processing(...args) { if (this.debugMode) console.log('[Processing]', ...args); },
     storage(...args) { if (this.debugMode) console.log('[Storage]', ...args); },
     sync(...args) { if (this.debugMode) console.log('[Sync]', ...args); },
-    error(module, ...args) { console.error(`[${module} Error]`, ...args); }
+    settings(...args) { if (this.debugMode) console.log('[Settings]', ...args); },
+    error(category, message, err) { console.error(`[${category} Error] ${message}`, err || ''); }
+};
+
+const ObjectURLManager = {
+    activeUrls: new Set(),
+    create(blob) {
+        if (!blob) return '';
+        const url = URL.createObjectURL(blob);
+        this.activeUrls.add(url);
+        return url;
+    },
+    revoke(url) {
+        if (url && this.activeUrls.has(url)) {
+            URL.revokeObjectURL(url);
+            this.activeUrls.delete(url);
+        }
+    },
+    revokeAll() {
+        this.activeUrls.forEach(url => URL.revokeObjectURL(url));
+        this.activeUrls.clear();
+    }
 };
 
 const Utils = {
@@ -98,7 +127,7 @@ const Utils = {
 class AppDB {
     constructor() {
         this.dbName = 'MediaNameStudioDB';
-        this.version = 4;
+        this.version = 5;
         this.db = null;
     }
 
@@ -112,32 +141,35 @@ class AppDB {
                 if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
             };
             request.onsuccess = (e) => { this.db = e.target.result; resolve(); };
-            request.onerror = (e) => reject(e);
+            request.onerror = (e) => reject(new AppError('StorageError', 'IndexedDB failed to open', e));
         });
     }
 
     async setSetting(key, value) {
-        return new Promise(resolve => {
+        return new Promise((resolve, reject) => {
             const tx = this.db.transaction('settings', 'readwrite');
             tx.objectStore('settings').put({ key, value });
             tx.oncomplete = () => resolve();
+            tx.onerror = (e) => reject(new AppError('StorageError', 'Failed to save setting', e));
         });
     }
 
-    async getSetting(key, defaultValue) {
+    async getSetting(key, defaultValue = null) {
         return new Promise(resolve => {
             const tx = this.db.transaction('settings', 'readonly');
             const req = tx.objectStore('settings').get(key);
             req.onsuccess = () => resolve(req.result ? req.result.value : defaultValue);
+            req.onerror = () => resolve(defaultValue);
         });
     }
 
     async saveStudents(studentsArray) {
-        return new Promise(resolve => {
+        return new Promise((resolve, reject) => {
             const tx = this.db.transaction('students', 'readwrite');
             const store = tx.objectStore('students');
             studentsArray.forEach(s => store.put(s));
             tx.oncomplete = () => resolve();
+            tx.onerror = (e) => reject(new AppError('StorageError', 'Failed to save students', e));
         });
     }
 
@@ -146,6 +178,7 @@ class AppDB {
             const tx = this.db.transaction('students', 'readonly');
             const req = tx.objectStore('students').getAll();
             req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => resolve([]);
         });
     }
 
@@ -166,11 +199,13 @@ class AppDB {
                 tx.onerror = (e) => {
                     if (e.target.error && e.target.error.name === 'QuotaExceededError') {
                         Utils.showToast("Bộ nhớ thiết bị đã đầy. Vui lòng xóa bớt media!");
+                        reject(new AppError('QuotaError', 'IndexedDB quota exceeded', e.target.error));
+                    } else {
+                        reject(new AppError('StorageError', 'Failed to save media item', e.target.error));
                     }
-                    reject(e.target.error);
                 };
             } catch (err) {
-                reject(err);
+                reject(new AppError('StorageError', 'Failed to execute media save', err));
             }
         });
     }
@@ -183,6 +218,7 @@ class AppDB {
                 const results = req.result || [];
                 resolve(results.sort((a, b) => b.timestamp - a.timestamp));
             };
+            req.onerror = () => resolve([]);
         });
     }
 
@@ -191,6 +227,7 @@ class AppDB {
             const tx = this.db.transaction('media', 'readonly');
             const req = tx.objectStore('media').get(id);
             req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => resolve(null);
         });
     }
 
@@ -204,6 +241,105 @@ class AppDB {
     }
 }
 const db = new AppDB();
+
+const DEFAULT_SETTINGS = {
+    schemaVersion: 1,
+    enabled: true,
+    unitName: 'TRƯỜNG TH.TQT',
+    showUnit: true,
+    showDate: true,
+    showLocation: false,
+    position: 'bottom-right',
+    align: 'right',
+    fontSize: 16,
+    color: '#ff2407',
+    bgColor: 'transparent',
+    shadow: true
+};
+
+const SettingsManager = {
+    currentSettings: { ...DEFAULT_SETTINGS },
+    saveDebounceTimer: null,
+
+    async load() {
+        try {
+            const saved = await db.getSetting('appSettings', null);
+            if (saved) {
+                this.currentSettings = this.migrate({ ...DEFAULT_SETTINGS, ...saved });
+            } else {
+                this.currentSettings = { ...DEFAULT_SETTINGS };
+            }
+            await this.save(true);
+            return this.currentSettings;
+        } catch (err) {
+            Logger.error('Settings', 'Load settings failed, restoring default', err);
+            this.currentSettings = { ...DEFAULT_SETTINGS };
+            return this.currentSettings;
+        }
+    },
+
+    migrate(savedSettings) {
+        let version = savedSettings.schemaVersion || 1;
+        if (version === 1) {
+            savedSettings.schemaVersion = 1;
+        }
+        return { ...DEFAULT_SETTINGS, ...savedSettings };
+    },
+
+    get(key = null) {
+        return key ? this.currentSettings[key] : this.currentSettings;
+    },
+
+    set(key, value) {
+        this.currentSettings[key] = value;
+        this.scheduleSave();
+    },
+
+    async update(partialSettings) {
+        Object.assign(this.currentSettings, partialSettings);
+        this.scheduleSave();
+    },
+
+    scheduleSave() {
+        this.showAutoSaveStatus(false);
+        if (this.saveDebounceTimer) clearTimeout(this.saveDebounceTimer);
+        this.saveDebounceTimer = setTimeout(async () => {
+            await this.save();
+        }, 400);
+    },
+
+    async save(immediate = false) {
+        if (this.saveDebounceTimer) {
+            clearTimeout(this.saveDebounceTimer);
+            this.saveDebounceTimer = null;
+        }
+        try {
+            await db.setSetting('appSettings', this.currentSettings);
+            this.showAutoSaveStatus(true);
+            Logger.settings('Auto-saved settings:', this.currentSettings);
+        } catch (err) {
+            Logger.error('Settings', 'Save settings failed', err);
+        }
+    },
+
+    async reset() {
+        this.currentSettings = { ...DEFAULT_SETTINGS };
+        await this.save(true);
+        return this.currentSettings;
+    },
+
+    showAutoSaveStatus(saved) {
+        const indicator = document.getElementById('autoSaveIndicator');
+        if (!indicator) return;
+        if (saved) {
+            indicator.innerHTML = '<i class="fa-solid fa-check"></i> Đã tự động lưu';
+            indicator.classList.remove('saving');
+        } else {
+            indicator.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu...';
+            indicator.classList.add('saving');
+        }
+    }
+};
 
 const Auth = {
     currentUser: null,
@@ -219,7 +355,7 @@ const Auth = {
                 if (event === 'SIGNED_IN') SyncManager.syncFromCloud();
             });
         } catch (err) {
-            Logger.error('Auth', err);
+            Logger.error('Auth', 'Auth init error', err);
         }
     },
     updateUI() {
@@ -256,10 +392,16 @@ const SyncManager = {
     isSyncing: false,
     async uploadSingleMedia(mediaObj) {
         if (!Auth.currentUser || !supabaseClient || mediaObj.sync_status === 'synced') return;
+
+        if (SettingsManager.get('enabled') && mediaObj.processingStatus === 'failed') {
+            Logger.sync('Bỏ qua upload vì watermark xử lý thất bại');
+            return;
+        }
+
         try {
             const userId = Auth.currentUser.id;
             const cleanStudent = Utils.removeVietnameseTones(mediaObj.studentName || 'student');
-            const targetBlob = mediaObj.processedBlob || mediaObj.blob || mediaObj.originalBlob;
+            const targetBlob = mediaObj.processedBlob || mediaObj.originalBlob || mediaObj.blob;
             if (!targetBlob) return;
 
             const filePath = `${userId}/${cleanStudent}/${mediaObj.fileName}`;
@@ -270,7 +412,7 @@ const SyncManager = {
 
             const { data: { publicUrl } } = supabaseClient.storage.from('media').getPublicUrl(filePath);
 
-            const { error: dbError } = await supabaseClient.from('media_files').insert([{
+            const { error: dbError } = await supabaseClient.from('media_files').upsert([{
                 user_id: userId,
                 student_name: mediaObj.studentName,
                 file_name: mediaObj.fileName,
@@ -278,7 +420,8 @@ const SyncManager = {
                 file_type: mediaObj.type,
                 file_path: filePath,
                 created_at: new Date(mediaObj.timestamp).toISOString()
-            }]);
+            }], { onConflict: 'file_path' });
+
             if (dbError) throw dbError;
 
             mediaObj.sync_status = 'synced';
@@ -286,7 +429,7 @@ const SyncManager = {
             await db.saveMedia(mediaObj);
             if (App.activeTab === 'tab-gallery') App.loadGallery();
         } catch (err) {
-            Logger.error('Sync', err);
+            Logger.error('Sync', 'Upload media failed', err);
             mediaObj.sync_status = 'failed';
             await db.saveMedia(mediaObj);
         }
@@ -315,6 +458,7 @@ const SyncManager = {
                                 id: new Date(file.created_at).getTime().toString(),
                                 type: file.file_type,
                                 blob: blob,
+                                originalBlob: blob,
                                 processedBlob: blob,
                                 studentName: file.student_name || 'Học sinh',
                                 fileName: file.file_name,
@@ -333,7 +477,7 @@ const SyncManager = {
                 if (App.activeTab === 'tab-gallery') App.loadGallery();
             }
         } catch (err) {
-            Logger.error('Sync', err);
+            Logger.error('Sync', 'Sync from cloud error', err);
         } finally {
             this.isSyncing = false;
         }
@@ -406,7 +550,7 @@ const LocationService = {
                 return data.display_name || null;
             }
         } catch (err) {
-            Logger.error('Location', 'Reverse Geocode error:', err.message);
+            Logger.error('Location', 'Reverse Geocode error', err);
         }
         return null;
     },
@@ -451,7 +595,7 @@ const LocationService = {
                     resolve(this.getLocationDisplayString());
                 },
                 (error) => {
-                    Logger.error('Location', 'GPS Denied/Failed:', error.message);
+                    Logger.error('Location', 'GPS Geolocation error', error);
                     this.updateUIStatus();
                     resolve(null);
                 },
@@ -599,16 +743,14 @@ const VideoProcessingEngine = {
     async processOfflineVideoWatermark(originalVideoBlob, studentName, settings, onProgress) {
         return new Promise((resolve, reject) => {
             let isCancelled = false;
-            this.currentJobCancel = () => {
-                isCancelled = true;
-            };
+            this.currentJobCancel = () => { isCancelled = true; };
 
             const video = document.createElement('video');
             video.muted = false;
             video.playsInline = true;
             video.preload = 'auto';
 
-            const videoUrl = URL.createObjectURL(originalVideoBlob);
+            const videoUrl = ObjectURLManager.create(originalVideoBlob);
             video.src = videoUrl;
 
             let audioContext = null;
@@ -619,8 +761,8 @@ const VideoProcessingEngine = {
                 try {
                     const duration = video.duration;
                     if (!duration || isNaN(duration) || duration <= 0) {
-                        URL.revokeObjectURL(videoUrl);
-                        return reject(new Error("Video duration không hợp lệ!"));
+                        ObjectURLManager.revoke(videoUrl);
+                        return reject(new AppError('ProcessingError', 'Thời lượng video không hợp lệ'));
                     }
 
                     const width = video.videoWidth || 1280;
@@ -633,8 +775,8 @@ const VideoProcessingEngine = {
 
                     const mimeType = Utils.getBestSupportedVideoMimeType();
                     if (!mimeType) {
-                        URL.revokeObjectURL(videoUrl);
-                        return reject(new Error("Trình duyệt không hỗ trợ MediaRecorder video!"));
+                        ObjectURLManager.revoke(videoUrl);
+                        return reject(new AppError('RecordingError', 'Trình duyệt không hỗ trợ MediaRecorder video'));
                     }
 
                     const canvasStream = canvas.captureStream(30);
@@ -654,7 +796,7 @@ const VideoProcessingEngine = {
                             }
                         }
                     } catch (audioErr) {
-                        Logger.error('Processing', 'Audio Context setup warning:', audioErr);
+                        Logger.error('Processing', 'Khởi tạo luồng âm thanh thất bại:', audioErr);
                     }
 
                     const mediaRecorder = new MediaRecorder(canvasStream, {
@@ -670,12 +812,12 @@ const VideoProcessingEngine = {
                     mediaRecorder.onstop = () => {
                         cleanup();
                         if (isCancelled) {
-                            reject(new Error("Đã hủy xử lý video"));
+                            reject(new AppError('ProcessingError', 'Đã hủy xử lý video'));
                             return;
                         }
                         const processedBlob = new Blob(chunks, { type: mimeType });
                         if (processedBlob.size === 0) {
-                            reject(new Error("Video sau khi xử lý có dung lượng 0 byte!"));
+                            reject(new AppError('ProcessingError', 'Video xuất ra có kích thước 0 byte'));
                         } else {
                             resolve(processedBlob);
                         }
@@ -684,7 +826,7 @@ const VideoProcessingEngine = {
                     const cleanup = () => {
                         try {
                             video.pause();
-                            URL.revokeObjectURL(videoUrl);
+                            ObjectURLManager.revoke(videoUrl);
                             if (audioContext && audioContext.state !== 'closed') {
                                 audioContext.close();
                             }
@@ -732,14 +874,14 @@ const VideoProcessingEngine = {
                     }
 
                 } catch (err) {
-                    URL.revokeObjectURL(videoUrl);
-                    reject(err);
+                    ObjectURLManager.revoke(videoUrl);
+                    reject(new AppError('ProcessingError', 'Lỗi xử lý khung hình video', err));
                 }
             };
 
             video.onerror = (err) => {
-                URL.revokeObjectURL(videoUrl);
-                reject(new Error("Không thể tải video để xử lý."));
+                ObjectURLManager.revoke(videoUrl);
+                reject(new AppError('ProcessingError', 'Không thể đọc tệp video gốc', err));
             };
         });
     }
@@ -749,7 +891,7 @@ const MediaPipeline = {
     async createMediaEntry(originalBlob, type, studentName, settings) {
         const timestamp = Date.now();
         const cleanName = Utils.removeVietnameseTones(studentName);
-        const mimeType = originalBlob.type || (type === 'photo' ? 'image/jpeg' : 'video/mp4');
+        const mimeType = originalBlob.type || (type === 'photo' ? 'image/jpeg' : Utils.getBestSupportedVideoMimeType());
         const ext = Utils.getFileExtensionFromMime(mimeType, type);
         const fileName = `${cleanName}_${Utils.formatDateForFile(timestamp)}.${ext}`;
 
@@ -812,21 +954,21 @@ const MediaPipeline = {
             }
 
             await db.saveMedia(mediaEntry);
-            Utils.showToast(`✅ Đã xử lý watermark cho: ${mediaEntry.studentName}`);
+            Utils.showToast(`✅ Đã đóng watermark: ${mediaEntry.studentName}`);
 
             if (Auth.currentUser) {
                 SyncManager.uploadSingleMedia(mediaEntry);
             }
 
         } catch (err) {
-            Logger.error('Pipeline', 'Processing failed:', err);
+            Logger.error('Pipeline', 'Xử lý media thất bại', err);
             mediaEntry.processingStatus = 'failed';
             mediaEntry.error = err.message || 'Lỗi xử lý watermark';
             await db.saveMedia(mediaEntry);
 
-            Utils.showToast(`❌ Lỗi watermark! Giữ nguyên video gốc. Vui lòng thử lại trong Thư viện.`);
+            Utils.showToast(`❌ Lỗi watermark! Video gốc vẫn an toàn. Có thể nhấn Thử lại trong Thư viện.`);
         } finally {
-            setTimeout(() => VideoProcessingEngine.hideProgress(), 600);
+            setTimeout(() => VideoProcessingEngine.hideProgress(), 500);
             if (App.activeTab === 'tab-gallery') App.loadGallery();
         }
 
@@ -841,7 +983,7 @@ const MediaPipeline = {
 
         return new Promise((resolve, reject) => {
             const img = new Image();
-            const url = URL.createObjectURL(photoBlob);
+            const url = ObjectURLManager.create(photoBlob);
             img.onload = () => {
                 try {
                     const canvas = document.createElement('canvas');
@@ -853,18 +995,18 @@ const MediaPipeline = {
                     WatermarkEngine.drawToCanvas(canvas, studentName, settings, locationText);
 
                     canvas.toBlob((blob) => {
-                        URL.revokeObjectURL(url);
+                        ObjectURLManager.revoke(url);
                         if (blob) resolve(blob);
-                        else reject(new Error("Không thể đóng gói Blob ảnh"));
+                        else reject(new AppError('WatermarkError', 'Không thể tạo Blob ảnh'));
                     }, 'image/jpeg', 0.92);
                 } catch (e) {
-                    URL.revokeObjectURL(url);
+                    ObjectURLManager.revoke(url);
                     reject(e);
                 }
             };
             img.onerror = () => {
-                URL.revokeObjectURL(url);
-                reject(new Error("Không tải được file ảnh gốc"));
+                ObjectURLManager.revoke(url);
+                reject(new AppError('WatermarkError', 'Không thể tải ảnh gốc'));
             };
             img.src = url;
         });
@@ -875,6 +1017,7 @@ class CaptureManager {
     constructor() {
         this.capabilities = Utils.checkCapabilities();
         this.stream = null;
+        this.videoTrack = null;
         this.mediaRecorder = null;
         this.recordedChunks = [];
         this.isRecording = false;
@@ -885,6 +1028,7 @@ class CaptureManager {
         this.currentDeviceId = '';
         this.recordingStudent = null;
         this.recordingSettings = null;
+        this.torchActive = false;
     }
 
     initUI() {
@@ -920,6 +1064,7 @@ class CaptureManager {
             };
 
             this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+            this.videoTrack = this.stream.getVideoTracks()[0] || null;
             video.srcObject = this.stream;
             this.isCameraReady = false;
 
@@ -927,18 +1072,16 @@ class CaptureManager {
                 video.play();
                 this.isCameraReady = true;
                 this.startCanvasLoop();
-                this.applyTrackCapabilities();
+                this.inspectTrackCapabilities();
             };
 
             this.enumerateCameras();
             this.applyFilters();
 
         } catch (err) {
-            Logger.error('Camera', 'startCamera error:', err);
+            Logger.error('Camera', 'startCamera error', err);
             if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
                 Utils.showToast("Không có quyền truy cập Camera/Microphone.");
-            } else if (err.name === 'NotFoundError') {
-                Utils.showToast("Không tìm thấy thiết bị Camera.");
             } else {
                 Utils.showToast("Lỗi mở Camera. Chuyển sang Native Camera Mode.");
                 this.capabilities.hasGetUserMedia = false;
@@ -952,6 +1095,7 @@ class CaptureManager {
         if (this.stream) {
             this.stream.getTracks().forEach(t => t.stop());
             this.stream = null;
+            this.videoTrack = null;
         }
         if (this.animationFrameId) {
             cancelAnimationFrame(this.animationFrameId);
@@ -962,15 +1106,57 @@ class CaptureManager {
         if (video) video.srcObject = null;
     }
 
-    applyTrackCapabilities() {
-        if (!this.stream) return;
-        const videoTrack = this.stream.getVideoTracks()[0];
-        if (!videoTrack || typeof videoTrack.getCapabilities !== 'function') return;
+    inspectTrackCapabilities() {
+        if (!this.videoTrack || typeof this.videoTrack.getCapabilities !== 'function') return;
 
         try {
-            const capabilities = videoTrack.getCapabilities();
-            Logger.camera('Track Capabilities:', capabilities);
+            const caps = this.videoTrack.getCapabilities();
+            Logger.camera('Hardware Track Capabilities:', caps);
+
+            const torchBtn = document.getElementById('btnTorchToggle');
+            if (torchBtn) {
+                if (caps.torch) {
+                    torchBtn.classList.remove('hidden');
+                } else {
+                    torchBtn.classList.add('hidden');
+                }
+            }
         } catch (e) { /* ignore */ }
+    }
+
+    async toggleTorch() {
+        if (!this.videoTrack || typeof this.videoTrack.applyConstraints !== 'function') return;
+        try {
+            const caps = this.videoTrack.getCapabilities ? this.videoTrack.getCapabilities() : {};
+            if (!caps.torch) return;
+
+            this.torchActive = !this.torchActive;
+            await this.videoTrack.applyConstraints({
+                advanced: [{ torch: this.torchActive }]
+            });
+
+            const torchBtn = document.getElementById('btnTorchToggle');
+            if (torchBtn) {
+                torchBtn.style.color = this.torchActive ? '#ffeb3b' : '#ffffff';
+            }
+        } catch (err) {
+            Logger.error('Camera', 'Bật tắt Flash thất bại', err);
+        }
+    }
+
+    async applyHardwareZoom(zoomVal) {
+        if (!this.videoTrack || typeof this.videoTrack.applyConstraints !== 'function') return false;
+        try {
+            const caps = this.videoTrack.getCapabilities ? this.videoTrack.getCapabilities() : {};
+            if (caps.zoom) {
+                const min = caps.zoom.min || 1;
+                const max = caps.zoom.max || 3;
+                const targetZoom = Math.min(Math.max(zoomVal, min), max);
+                await this.videoTrack.applyConstraints({ advanced: [{ zoom: targetZoom }] });
+                return true;
+            }
+        } catch (e) { /* fallback */ }
+        return false;
     }
 
     startCanvasLoop() {
@@ -1003,21 +1189,24 @@ class CaptureManager {
         render();
     }
 
-    applyFilters() {
+    async applyFilters() {
         const zoom = parseFloat(document.getElementById('zoomRange')?.value) || 1;
         const bright = parseFloat(document.getElementById('brightnessRange')?.value) || 1;
         const canvas = document.getElementById('outputCanvas');
+
+        const hardwareApplied = await this.applyHardwareZoom(zoom);
+
         if (canvas) {
-            canvas.style.transform = `scale(${zoom})`;
+            canvas.style.transform = hardwareApplied ? 'none' : `scale(${zoom})`;
             canvas.style.filter = bright !== 1 ? `brightness(${bright})` : 'none';
         }
     }
 
     async capturePhoto(studentName, settings) {
-        if (!this.isCameraReady) throw new Error("Camera chưa sẵn sàng!");
+        if (!this.isCameraReady) throw new AppError('CameraError', 'Camera chưa sẵn sàng');
 
         const canvas = document.getElementById('outputCanvas');
-        if (!canvas || canvas.width === 0) throw new Error("Khung hình rỗng!");
+        if (!canvas || canvas.width === 0) throw new AppError('CameraError', 'Khung hình rỗng');
 
         let locationText = null;
         if (settings.showLocation) {
@@ -1106,7 +1295,7 @@ class CaptureManager {
             }, 1000);
 
         } catch (err) {
-            Logger.error('Recording', 'Start recording failed:', err);
+            Logger.error('Recording', 'Bắt đầu quay video thất bại', err);
             Utils.showToast("Lỗi khởi tạo quay video!");
         }
     }
@@ -1150,7 +1339,7 @@ class CaptureManager {
                 this.startCamera(e.target.value);
             };
         } catch (e) {
-            Logger.error('Camera', 'Enumerate error:', e);
+            Logger.error('Camera', 'Enumerate devices error', e);
         }
     }
 
@@ -1168,19 +1357,6 @@ class CaptureManager {
 }
 
 const App = {
-    settings: {
-        enabled: true,
-        unitName: 'TRƯỜNG TH.TQT',
-        showUnit: true,
-        showDate: true,
-        showLocation: false,
-        position: 'bottom-right',
-        align: 'right',
-        fontSize: 16,
-        color: '#ff2407',
-        bgColor: 'transparent',
-        shadow: true
-    },
     currentStudent: null,
     activeTab: 'tab-camera',
     isSelectMode: false,
@@ -1189,7 +1365,7 @@ const App = {
     async init() {
         try {
             await db.init();
-            await this.loadSettings();
+            await SettingsManager.load();
 
             this.captureManager = new CaptureManager();
             this.captureManager.initUI();
@@ -1198,7 +1374,7 @@ const App = {
             this.bindEvents();
             await Auth.init();
             await this.loadStudentList();
-            await this.loadGallery();
+            await this.restoreLastState();
 
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'visible' && this.activeTab === 'tab-camera') {
@@ -1210,72 +1386,49 @@ const App = {
                 }
             });
 
-            if (this.settings.showLocation) {
+            if (SettingsManager.get('showLocation')) {
                 LocationService.updateLocation();
             }
 
-            if (this.captureManager.capabilities.hasGetUserMedia) {
-                this.captureManager.startCamera();
-            }
-
         } catch (error) {
-            Logger.error('App', 'Init error:', error);
+            Logger.error('App', 'Lỗi khởi tạo ứng dụng', error);
             Utils.showToast("Lỗi khởi tạo ứng dụng!");
         }
     },
 
-    async loadSettings() {
-        const stored = await db.getSetting('appSettings', null);
-        if (stored) {
-            Object.assign(this.settings, stored);
-            if (stored.shadow === undefined) this.settings.shadow = true;
-        }
-    },
-
-    async saveSettings() {
-        this.settings.enabled = document.getElementById('settingWatermark').checked;
-        this.settings.unitName = document.getElementById('setUnitName').value.trim();
-        this.settings.showUnit = document.getElementById('setShowUnit').checked;
-        this.settings.showDate = document.getElementById('setShowDate').checked;
-
-        const prevShowLoc = this.settings.showLocation;
-        this.settings.showLocation = document.getElementById('setShowLocation').checked;
-        if (this.settings.showLocation && !prevShowLoc) {
-            LocationService.updateLocation(true);
+    async restoreLastState() {
+        const lastStudentId = await db.getSetting('lastSelectedStudentId', null);
+        if (lastStudentId) {
+            const students = await db.getStudents();
+            const found = students.find(s => s.id === lastStudentId);
+            if (found) {
+                this.currentStudent = found;
+                document.getElementById('headerStudentName').textContent = found.name;
+            }
         }
 
-        this.settings.position = document.getElementById('setPosition').value;
-        this.settings.align = document.getElementById('setAlign').value;
-        this.settings.fontSize = parseInt(document.getElementById('setFontSize').value) || 16;
-        this.settings.color = document.getElementById('setColor').value;
-        this.settings.bgColor = document.getElementById('setBgColor').value;
-        this.settings.shadow = document.getElementById('setShadow').checked;
-
-        await db.setSetting('appSettings', this.settings);
-        Utils.showToast('Đã lưu cấu hình watermark!');
+        const lastTab = await db.getSetting('lastActiveTab', 'tab-camera');
+        this.switchTab(lastTab, true);
     },
 
     initSettingsUI() {
+        const settings = SettingsManager.get();
+
         const check = document.getElementById('settingWatermark');
-        check.checked = this.settings.enabled;
-        check.addEventListener('change', (e) => {
-            document.getElementById('watermarkSettingsOptions').style.display = e.target.checked ? 'block' : 'none';
-        });
-        document.getElementById('watermarkSettingsOptions').style.display = this.settings.enabled ? 'block' : 'none';
+        check.checked = settings.enabled;
+        document.getElementById('watermarkSettingsOptions').style.display = settings.enabled ? 'block' : 'none';
 
-        document.getElementById('setUnitName').value = this.settings.unitName;
-        document.getElementById('setShowUnit').checked = this.settings.showUnit;
-        document.getElementById('setShowDate').checked = this.settings.showDate;
+        document.getElementById('setUnitName').value = settings.unitName || '';
+        document.getElementById('setShowUnit').checked = !!settings.showUnit;
+        document.getElementById('setShowDate').checked = !!settings.showDate;
+        document.getElementById('setShowLocation').checked = !!settings.showLocation;
 
-        const showLocInput = document.getElementById('setShowLocation');
-        showLocInput.checked = !!this.settings.showLocation;
-
-        document.getElementById('setPosition').value = this.settings.position;
-        document.getElementById('setAlign').value = this.settings.align;
-        document.getElementById('setFontSize').value = this.settings.fontSize;
-        document.getElementById('setColor').value = this.settings.color;
-        document.getElementById('setBgColor').value = this.settings.bgColor;
-        document.getElementById('setShadow').checked = this.settings.shadow !== undefined ? this.settings.shadow : true;
+        document.getElementById('setPosition').value = settings.position || 'bottom-right';
+        document.getElementById('setAlign').value = settings.align || 'right';
+        document.getElementById('setFontSize').value = settings.fontSize || 16;
+        document.getElementById('setColor').value = settings.color || '#ff2407';
+        document.getElementById('setBgColor').value = settings.bgColor || 'transparent';
+        document.getElementById('setShadow').checked = settings.shadow !== undefined ? settings.shadow : true;
 
         LocationService.updateUIStatus();
     },
@@ -1288,7 +1441,38 @@ const App = {
             btn.addEventListener('click', (e) => this.switchTab(e.currentTarget.dataset.target));
         });
 
-        document.getElementById('btnSaveSettings')?.addEventListener('click', () => this.saveSettings());
+        const bindAutoSave = (elementId, eventType, key, isCheckbox = false) => {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.addEventListener(eventType, (e) => {
+                const val = isCheckbox ? e.target.checked : e.target.value;
+                SettingsManager.set(key, val);
+                if (key === 'enabled') {
+                    document.getElementById('watermarkSettingsOptions').style.display = val ? 'block' : 'none';
+                }
+                if (key === 'showLocation' && val) {
+                    LocationService.updateLocation(true);
+                }
+            });
+        };
+
+        bindAutoSave('settingWatermark', 'change', 'enabled', true);
+        bindAutoSave('setUnitName', 'input', 'unitName');
+        bindAutoSave('setShowUnit', 'change', 'showUnit', true);
+        bindAutoSave('setShowDate', 'change', 'showDate', true);
+        bindAutoSave('setShowLocation', 'change', 'showLocation', true);
+        bindAutoSave('setPosition', 'change', 'position');
+        bindAutoSave('setAlign', 'change', 'align');
+        bindAutoSave('setFontSize', 'input', 'fontSize');
+        bindAutoSave('setColor', 'input', 'color');
+        bindAutoSave('setBgColor', 'input', 'bgColor');
+        bindAutoSave('setShadow', 'change', 'shadow', true);
+
+        document.getElementById('btnSaveSettings')?.addEventListener('click', () => {
+            SettingsManager.save(true);
+            Utils.showToast('Đã lưu cấu hình watermark!');
+        });
+
         document.getElementById('excelUpload')?.addEventListener('change', (e) => this.handleExcelImport(e));
         document.getElementById('btnDownloadSample')?.addEventListener('click', () => this.downloadSampleExcel());
         document.getElementById('btnClearList')?.addEventListener('click', () => this.clearStudents());
@@ -1299,6 +1483,7 @@ const App = {
         document.getElementById('btnSwitchCamera')?.addEventListener('click', () => this.captureManager.switchCamera());
         document.getElementById('btnCapturePhoto')?.addEventListener('click', () => this.handleCapturePhoto());
         document.getElementById('btnRecordVideo')?.addEventListener('click', () => this.handleRecordVideo());
+        document.getElementById('btnTorchToggle')?.addEventListener('click', () => this.captureManager.toggleTorch());
 
         document.getElementById('nativePhotoInput')?.addEventListener('change', (e) => this.handleNativeFileInput(e, 'photo'));
         document.getElementById('nativeVideoInput')?.addEventListener('change', (e) => this.handleNativeFileInput(e, 'video'));
@@ -1337,8 +1522,10 @@ const App = {
         });
     },
 
-    switchTab(targetTabId) {
+    async switchTab(targetTabId, isInitialLoad = false) {
         this.activeTab = targetTabId;
+        db.setSetting('lastActiveTab', targetTabId);
+
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
 
@@ -1349,10 +1536,11 @@ const App = {
             if (this.captureManager.capabilities.hasGetUserMedia) {
                 this.captureManager.startCamera(this.captureManager.currentDeviceId);
             }
-            if (this.settings.showLocation) LocationService.updateLocation();
+            if (SettingsManager.get('showLocation')) LocationService.updateLocation();
         } else {
             this.captureManager.stopCamera();
         }
+
         if (targetTabId === 'tab-gallery') this.loadGallery();
         if (targetTabId === 'tab-settings') LocationService.updateUIStatus();
     },
@@ -1371,17 +1559,18 @@ const App = {
         }
 
         try {
-            const blob = await this.captureManager.capturePhoto(this.currentStudent.name, this.settings);
+            const settings = SettingsManager.get();
+            const blob = await this.captureManager.capturePhoto(this.currentStudent.name, settings);
             const mediaEntry = await MediaPipeline.createMediaEntry(blob, 'photo', this.currentStudent.name, { enabled: false });
             mediaEntry.processedBlob = blob;
-            mediaEntry.watermarkApplied = this.settings.enabled;
+            mediaEntry.watermarkApplied = settings.enabled;
             mediaEntry.processingStatus = 'success';
             await db.saveMedia(mediaEntry);
 
             Utils.showToast(`Đã lưu ảnh: ${this.currentStudent.name}`);
             if (Auth.currentUser) SyncManager.uploadSingleMedia(mediaEntry);
         } catch (err) {
-            Logger.error('App', 'Capture Photo Failed:', err);
+            Logger.error('App', 'Lỗi chụp ảnh', err);
             Utils.showToast("Lỗi chụp ảnh!");
         }
     },
@@ -1402,7 +1591,7 @@ const App = {
         if (this.captureManager.isRecording) {
             this.captureManager.stopRecording();
         } else {
-            this.captureManager.startRecording(this.currentStudent.name, this.settings);
+            this.captureManager.startRecording(this.currentStudent.name, SettingsManager.get());
         }
     },
 
@@ -1419,15 +1608,14 @@ const App = {
 
         Utils.showToast(`Đang tiếp nhận ${type === 'photo' ? 'ảnh' : 'video'} gốc...`);
         try {
-            const entry = await MediaPipeline.createMediaEntry(file, type, this.currentStudent.name, this.settings);
-            await MediaPipeline.processAndSave(entry, this.settings);
+            const settings = SettingsManager.get();
+            const entry = await MediaPipeline.createMediaEntry(file, type, this.currentStudent.name, settings);
+            await MediaPipeline.processAndSave(entry, settings);
         } catch (err) {
-            Logger.error('App', 'Native File Handle Error:', err);
+            Logger.error('App', 'Lỗi xử lý file camera thiết bị', err);
             Utils.showToast("Lỗi xử lý file từ Camera!");
         }
     },
-
-    // === STUDENT MANAGEMENT ===
 
     handleExcelImport(e) {
         const file = e.target.files[0];
@@ -1467,7 +1655,8 @@ const App = {
         const input = document.getElementById('manualName');
         const name = input.value.trim();
         if (!name) return Utils.showToast("Nhập họ tên!");
-        await db.saveStudents([{ id: Date.now().toString(), name, class: '' }]);
+        const newStudent = { id: Date.now().toString(), name, class: '' };
+        await db.saveStudents([newStudent]);
         input.value = '';
         input.focus();
         this.loadStudentList();
@@ -1475,9 +1664,10 @@ const App = {
     },
 
     async clearStudents() {
-        if (confirm("Xóa toàn bộ danh sách?")) {
+        if (confirm("Xóa toàn bộ danh sách học sinh?")) {
             await db.clearStudents();
             this.currentStudent = null;
+            await db.setSetting('lastSelectedStudentId', null);
             document.getElementById('headerStudentName').textContent = "Chưa chọn học sinh";
             this.loadStudentList();
         }
@@ -1500,6 +1690,7 @@ const App = {
                             <i class="fa-solid fa-circle-check" style="color: ${this.currentStudent?.id === student.id ? '#007bff' : '#555'}"></i>`;
             li.addEventListener('click', () => {
                 this.currentStudent = student;
+                db.setSetting('lastSelectedStudentId', student.id);
                 document.getElementById('headerStudentName').textContent = student.name;
                 this.loadStudentList(filterText);
                 this.switchTab('tab-camera');
@@ -1507,8 +1698,6 @@ const App = {
             ul.appendChild(li);
         });
     },
-
-    // === GALLERY ===
 
     toggleSelectMode() {
         this.isSelectMode = !this.isSelectMode;
@@ -1530,9 +1719,8 @@ const App = {
 
     updateSelectedCount() {
         const checkedBoxes = document.querySelectorAll('.gallery-checkbox:checked');
-        const count = checkedBoxes.length;
         const countText = document.getElementById('selectedCountText');
-        if (countText) countText.textContent = `Đã chọn: ${count}`;
+        if (countText) countText.textContent = `Đã chọn: ${checkedBoxes.length}`;
     },
 
     setAllCheckboxes(select) {
@@ -1556,6 +1744,8 @@ const App = {
     },
 
     async loadGallery() {
+        ObjectURLManager.revokeAll();
+
         const filter = document.getElementById('filterType').value;
         let list = await db.getAllMedia();
         if (filter !== 'all') list = list.filter(m => m.type === filter);
@@ -1572,8 +1762,8 @@ const App = {
             const item = document.createElement('div');
             item.className = 'gallery-item';
 
-            const activeBlob = media.processedBlob || media.blob || media.originalBlob;
-            const url = activeBlob ? URL.createObjectURL(activeBlob) : '';
+            const activeBlob = media.processedBlob || media.originalBlob || media.blob;
+            const url = ObjectURLManager.create(activeBlob);
 
             const syncBadge = media.sync_status === 'synced' ?
                 '<span class="badge sync-badge synced" title="Đã đồng bộ"><i class="fa-solid fa-cloud-check"></i></span>' :
@@ -1587,7 +1777,7 @@ const App = {
             }
 
             const mediaTag = media.type === 'photo' ?
-                `<img src="${url}" alt="photo">` :
+                `<img src="${url}" alt="photo" loading="lazy">` :
                 `<video src="${url}" preload="metadata" playsinline></video>`;
 
             const checkboxDisplay = this.isSelectMode ? '' : 'style="display: none;"';
@@ -1610,7 +1800,7 @@ const App = {
                 retryBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     Utils.showToast("Đang thử lại xử lý watermark...");
-                    await MediaPipeline.processAndSave(media, this.settings);
+                    await MediaPipeline.processAndSave(media, SettingsManager.get());
                 });
             }
 
@@ -1653,17 +1843,17 @@ const App = {
 
         for (let i = 0; i < selectedImages.length; i++) {
             const item = selectedImages[i];
-            const targetBlob = item.processedBlob || item.blob || item.originalBlob;
+            const targetBlob = item.processedBlob || item.originalBlob || item.blob;
             if (!targetBlob) continue;
 
-            const url = URL.createObjectURL(targetBlob);
+            const url = ObjectURLManager.create(targetBlob);
             const a = document.createElement('a');
             a.href = url;
             a.download = item.fileName || `image_${Date.now()}.jpg`;
             document.body.appendChild(a);
             a.click();
             a.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            setTimeout(() => ObjectURLManager.revoke(url), 1000);
             successCount++;
             await new Promise(res => setTimeout(res, 250));
         }
@@ -1679,7 +1869,7 @@ const App = {
         const items = this.getSelectedGalleryItems();
 
         for (const m of items) {
-            const activeBlob = m.processedBlob || m.blob || m.originalBlob;
+            const activeBlob = m.processedBlob || m.originalBlob || m.blob;
             if (activeBlob) {
                 zip.file(m.fileName, activeBlob);
             }
