@@ -110,13 +110,14 @@
             position: relative;
         }
         .tab-content {
-            display: none;
-            height: 100%;
-            padding-bottom: calc(70px + env(safe-area-inset-bottom));
-        }
-        .tab-content.active {
-            display: block;
-        }
+    display: none;
+    min-height: 100%;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+}
+
+.tab-content.active {
+    display: block;
+}
 
         /* ===== CAMERA TAB ===== */
         #tab-camera.tab-content {
